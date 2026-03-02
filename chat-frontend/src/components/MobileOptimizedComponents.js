@@ -230,4 +230,19 @@ const MobileColorPicker = ({
           }}
         >
           {value}
-        </Box>\n      </Box>\n    </Box>\n  );\n};\n\nexport {\n  MobileCard,\n  MobileSwitch,\n  MobileFormControlLabel,\n  MobileSelect,\n  MobileSlider,\n  MobileButton,\n  MobileSettingsSection,\n  MobileColorPicker,\n};
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+export {
+  MobileCard,
+  MobileSwitch,
+  MobileFormControlLabel,
+  MobileSelect,
+  MobileSlider,
+  MobileButton,
+  MobileSettingsSection,
+  MobileColorPicker
+};

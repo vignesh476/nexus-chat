@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { sanitizeInput } from '../utils/security';
 import config from '../config';
 import ErrorBoundary from './ErrorBoundary';
@@ -342,7 +342,7 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
       formData.append('content', text);
       formData.append('privacy', imagePrivacy);
 
-      const response = await fetch('http://localhost:8000/messages/send_file', {
+      const response = await fetch(`${config.API_URL}/messages/send_file`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

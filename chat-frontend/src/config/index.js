@@ -1,28 +1,29 @@
 // Configuration for API URLs - supports both local development and production (Vercel)
 // Environment variables:
-// - REACT_APP_API_URL: Backend API URL
-// - REACT_APP_SOCKET_URL: WebSocket URL
+// - REACT_APP_API_URL: Backend API URL (REQUIRED for production)
+// - REACT_APP_SOCKET_URL: WebSocket URL (optional, defaults to API_URL)
 // - REACT_APP_ENVIRONMENT: 'development' or 'production'
+
+// Default fallback for local development - this should only be used in development
+const DEFAULT_LOCAL_API_URL = 'http://localhost:8000';
 
 const getApiUrl = () => {
   // Check for environment variable
   const envUrl = process.env.REACT_APP_API_URL;
   
   if (envUrl) {
-    return envUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    const cleanUrl = envUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    console.log('[Config] Using API URL from environment:', cleanUrl);
+    return cleanUrl;
   }
   
-  // Fallback for local development
-  // Check if we're running on localhost
-  if (typeof window !== 'undefined') {
-    const { hostname } = window.location;
-    // If running on same host, use relative path
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://127.0.0.1:8000';
-    }
+  // Development fallback - warn in console
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('[Config] WARNING: REACT_APP_API_URL not set, using default fallback. This should only be used in local development!');
+    console.warn('[Config] For production, please set REACT_APP_API_URL environment variable.');
   }
   
-  return 'http://localhost:8000';
+  return DEFAULT_LOCAL_API_URL;
 };
 
 const getSocketUrl = () => {
@@ -33,7 +34,7 @@ const getSocketUrl = () => {
     return envUrl.replace(/\/+$/, ''); // Remove trailing slashes
   }
   
-  // Fallback to API_URL
+  // Fallback to API_URL if SOCKET_URL not set
   return getApiUrl();
 };
 

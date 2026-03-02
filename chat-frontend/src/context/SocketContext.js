@@ -23,8 +23,18 @@ export const SocketProvider = ({ children }) => {
   const initializeSocket = useCallback(() => {
     if (socketRef.current?.connected) return;
 
-    const SOCKET_URL = (process.env.REACT_APP_SOCKET_URL || 'http://localhost:8000').replace(/\/$/, '');
-    console.log('Initializing socket connection to', SOCKET_URL);
+    // Use REACT_APP_SOCKET_URL if set, otherwise fallback to REACT_APP_API_URL
+    const socketEnvUrl = process.env.REACT_APP_SOCKET_URL;
+    const apiEnvUrl = process.env.REACT_APP_API_URL;
+    const fallbackUrl = apiEnvUrl || 'http://localhost:8000';
+    const SOCKET_URL = (socketEnvUrl || fallbackUrl).replace(/\/$/, '');
+    
+    console.log('[SocketContext] Initializing socket connection to', SOCKET_URL);
+    
+    // Warn if using fallback
+    if (!socketEnvUrl && !apiEnvUrl && process.env.NODE_ENV === 'development') {
+      console.warn('[SocketContext] WARNING: Using fallback URL. Set REACT_APP_SOCKET_URL or REACT_APP_API_URL for proper configuration.');
+    }
     
     socketRef.current = io(SOCKET_URL, { 
       transports: ['websocket', 'polling'],

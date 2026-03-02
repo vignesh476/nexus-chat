@@ -61,11 +61,12 @@ const CallHistoryPage = () => {
       fetchCallHistory();
     }
   }, [user]);
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
   const fetchCallHistory = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/calls/history', {
+      const response = await fetch(`${API_BASE_URL}/calls/history`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -125,14 +126,14 @@ const CallHistoryPage = () => {
     return isVideo ? <Videocam /> : <Phone />;
   };
 
-  const handleCallUser = async (username) => {
+const handleCallUser = async (username) => {
     try {
       // Find or create a room with this user
-      const response = await fetch('http://localhost:8000/rooms/direct', {
+      const response = await fetch(`${API_BASE_URL}/rooms/direct`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getToken()}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ other_user: username })
       });
@@ -148,9 +149,9 @@ const CallHistoryPage = () => {
     }
   };
 
-  const clearAllHistory = async () => {
+const clearAllHistory = async () => {
     try {
-      const response = await fetch('http://localhost:8000/calls/history', {
+      const response = await fetch(`${API_BASE_URL}/calls/history`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -165,9 +166,9 @@ const CallHistoryPage = () => {
     }
   };
 
-  const deleteCall = async (callId) => {
+const deleteCall = async (callId) => {
     try {
-      const response = await fetch(`http://localhost:8000/calls/${callId}`, {
+      const response = await fetch(`${API_BASE_URL}/calls/${callId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -182,9 +183,9 @@ const CallHistoryPage = () => {
     }
   };
 
-  const blockUser = async (username) => {
+const blockUser = async (username) => {
     try {
-      const response = await fetch('http://localhost:8000/users/block', {
+      const response = await fetch(`${API_BASE_URL}/users/block`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

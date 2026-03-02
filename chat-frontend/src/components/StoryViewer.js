@@ -6,6 +6,16 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { interactStory, deleteStory } from '../api/stories';
 
+// Get API URL from environment variable with fallback for development
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+
+// Helper function to build media URLs
+const getMediaUrl = (filePath) => {
+  if (!filePath) return '';
+  const cleanPath = filePath.replace(/\\/g, '/');
+  return `${API_BASE_URL}/${cleanPath}`;
+};
+
 export default function StoryViewer({ open, onClose, stories = [], startIndex = 0, socket }) {
   const [index, setIndex] = useState(startIndex);
   const [localStory, setLocalStory] = useState(null);
@@ -169,6 +179,9 @@ export default function StoryViewer({ open, onClose, stories = [], startIndex = 
     }
   };
 
+  // Get media URL dynamically
+  const mediaUrl = getMediaUrl(s.file_path);
+
   return (
     <Dialog fullScreen open={open} onClose={onClose}>
       <Box sx={{ position: 'relative', height: '100%' }}>
@@ -278,7 +291,7 @@ export default function StoryViewer({ open, onClose, stories = [], startIndex = 
             {s.story_type === 'image' && (
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%' }}>
                 <img 
-                  src={`http://localhost:8000/${s.file_path?.replace(/\\/g, '/')}`}
+                  src={mediaUrl}
                   alt={s.content || 'Story image'} 
                   style={{ 
                     maxWidth: '90%', 
@@ -303,7 +316,7 @@ export default function StoryViewer({ open, onClose, stories = [], startIndex = 
                   controls 
                   autoPlay
                   muted
-                  src={`http://localhost:8000/${s.file_path?.replace(/\\/g, '/')}`}
+                  src={mediaUrl}
                   style={{ 
                     maxWidth: '90%', 
                     maxHeight: '80vh',
@@ -325,7 +338,7 @@ export default function StoryViewer({ open, onClose, stories = [], startIndex = 
               <Box sx={{ textAlign: 'center', width: '100%' }}>
                 <audio 
                   controls 
-                  src={`http://localhost:8000/${s.file_path?.replace(/\\/g, '/')}`}
+                  src={mediaUrl}
                   style={{ width: '100%', maxWidth: '400px' }}
                   onError={(e) => console.error('Audio failed to load:', s.file_path)}
                 />
@@ -377,7 +390,7 @@ export default function StoryViewer({ open, onClose, stories = [], startIndex = 
               <Typography variant="caption" sx={{ display: 'block' }}>Debug Info:</Typography>
               <Typography variant="caption" sx={{ display: 'block' }}>Type: {s?.story_type}</Typography>
               <Typography variant="caption" sx={{ display: 'block' }}>File Path: {s?.file_path}</Typography>
-              <Typography variant="caption" sx={{ display: 'block' }}>Full URL: {s?.file_path ? `http://localhost:8000${s.file_path}` : 'N/A'}</Typography>
+              <Typography variant="caption" sx={{ display: 'block' }}>Media URL: {mediaUrl}</Typography>
               <Typography variant="caption" sx={{ display: 'block' }}>Content: {s?.content}</Typography>
             </Box>
           )}

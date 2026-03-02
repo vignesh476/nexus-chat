@@ -16,6 +16,9 @@ import '../styles/mobile-chat.css';
 import '../styles/mobile-chat-improvements.css';
 // import MessageActions from './MessageActions'; // Commented out unused import
 
+// Get API URL from environment variable with fallback for development
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+
 // Add CSS animations for games
 const gameStyles = `
   @keyframes bounce {
@@ -73,7 +76,7 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
 
   // Event handlers to prevent arrow functions in JSX
   const handleImageClick = useCallback((msg) => {
-    window.open(`http://127.0.0.1:8000/messages/download/${msg._id}`, '_blank');
+    window.open(`${API_BASE_URL}/messages/download/${msg._id}`, '_blank');
   }, []);
   
   const handleRockClick = useCallback(() => onRPSPlay && onRPSPlay('rock'), [onRPSPlay]);
@@ -425,7 +428,7 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       return (
         <Box>
           <img
-            src={`http://127.0.0.1:8000/messages/download/${msg._id}`}
+            src={`${API_BASE_URL}/messages/download/${msg._id}`}
             alt={msg.file_name}
             style={{
               maxWidth: '100%',
@@ -445,7 +448,7 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       return (
         <Box>
           <video
-            src={`http://127.0.0.1:8000/messages/download/${msg._id}`}
+            src={`${API_BASE_URL}/messages/download/${msg._id}`}
             controls
             style={{ maxWidth: '300px', maxHeight: '300px', borderRadius: '8px' }}
           />
@@ -456,7 +459,7 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       return (
         <Box>
           <audio
-            src={`http://127.0.0.1:8000/messages/download/${msg._id}`}
+            src={`${API_BASE_URL}/messages/download/${msg._id}`}
             controls
             style={{ maxWidth: '250px', height: '40px' }}
             preload="metadata"
@@ -469,7 +472,7 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
         <Box>
           <Typography variant="body2" sx={{ mb: 1 }}>{msg.content}</Typography>
           <a
-            href={`http://127.0.0.1:8000/messages/download/${msg._id}`}
+            href={`${API_BASE_URL}/messages/download/${msg._id}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{ textDecoration: 'none' }}
