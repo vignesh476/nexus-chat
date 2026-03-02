@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import config from '../config';
 
 const CallContext = createContext();
 
@@ -91,7 +92,7 @@ export const CallProvider = ({ children }) => {
     if (callState.callStatus === 'connected' && callState.callStartTime) {
       const duration = Math.floor((Date.now() - callState.callStartTime) / 1000);
       try {
-        await fetch('http://localhost:8000/calls/log', {
+        await fetch(`${config.API_URL}/calls/log`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useMood } from '../context/MoodContext';
 import { useAuth } from '../context/AuthContext';
 import useResponsive from '../hooks/useResponsive';
+import config from '../config';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import { messagesAPI } from '../api';
