@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { usersAPI } from '../api';
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
 
 const UserProfileContext = createContext();
 
@@ -15,7 +16,8 @@ export const useUserProfiles = () => {
 export const UserProfileProvider = ({ children }) => {
   const [userProfiles, setUserProfiles] = useState(new Map());
   const [loadingProfiles, setLoadingProfiles] = useState(new Set());
-  const { user } = useAuth();
+  const { user, updateUserProfile: updateAuthProfile } = useAuth();
+  const socket = useSocket();
 
   // Get user profile from cache or fetch if not available
   const getUserProfile = useCallback(async (username) => {
@@ -28,14 +30,27 @@ export const UserProfileProvider = ({ children }) => {
 
     // Check if currently loading
     if (loadingProfiles.has(username)) {
-      return null;
+      // Wait for existing request to complete
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!loadingProfiles.has(username)) {
+            clearInterval(checkInterval);
+            resolve(userProfiles.get(username) || null);
+          }
+        }, 100);
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          resolve(null);
+        }, 5000);
+      });
     }
 
     // Start loading
     setLoadingProfiles(prev => new Set(prev).add(username));
 
     try {
-            // For current user, we might have the data from auth context
+      // For current user, we might have the data from auth context
       if (username === user?.username) {
         const profileData = {
           username: user.username,
@@ -51,8 +66,10 @@ export const UserProfileProvider = ({ children }) => {
         const response = await usersAPI.getUserProfile(username);
         const profileData = {
           username,
-          profile_picture_url: response.data.profile_picture_url,
-          status: response.data.status
+          profile_picture_url: response.data.profile_picture,
+          status: response.data.status,
+          bio: response.data.bio,
+          custom_status: response.data.custom_status
         };
         setUserProfiles(prev => new Map(prev).set(username, profileData));
         return profileData;
@@ -82,7 +99,12 @@ export const UserProfileProvider = ({ children }) => {
 
   // Update user profile in cache
   const updateUserProfile = useCallback((username, profileData) => {
-    setUserProfiles(prev => new Map(prev).set(username, profileData));
+    setUserProfiles(prev => {
+      const updated = new Map(prev);
+      const existing = updated.get(username) || {};
+      updated.set(username, { ...existing, ...profileData, username });
+      return updated;
+    });
   }, []);
 
   // Clear cache (useful when logging out)
@@ -136,11 +158,39 @@ export const UserProfileProvider = ({ children }) => {
     }
   }, [userProfiles, loadingProfiles, user]);
 
-  // Listen for profile updates via socket (to be implemented)
+  // Listen for profile updates via socket
   useEffect(() => {
-    // TODO: Listen for profile picture updates via socket
-    // This will allow real-time updates across all components
-  }, []);
+    if (!socket?.onProfileUpdate) return;
+
+    const unsubscribe = socket.onProfileUpdate((profileData) => {
+      console.log('[UserProfileContext] Received profile update:', profileData);
+      const { username, profile_picture, bio, status, custom_status } = profileData;
+      
+      if (username) {
+        // Update profile cache
+        updateUserProfile(username, {
+          profile_picture_url: profile_picture,
+          bio,
+          status,
+          custom_status
+        });
+
+        // If it's the current user, update auth context too
+        if (username === user?.username && updateAuthProfile) {
+          updateAuthProfile({
+            profile_picture,
+            bio,
+            status,
+            custom_status
+          });
+        }
+      }
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [socket, user?.username, updateUserProfile, updateAuthProfile]);
 
   const value = {
     userProfiles,

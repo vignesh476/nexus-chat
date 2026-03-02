@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { sanitizeInput } from '../utils/security';
 import config from '../config';
 import ErrorBoundary from './ErrorBoundary';
+import useResponsive from '../hooks/useResponsive';
 import {
   Box,
   TextField,
@@ -12,8 +13,13 @@ import {
   LinearProgress,
   Chip,
   Button,
+  Collapse,
+  Fab,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
 } from '@mui/material';
-import { Send, AttachFile, Close, InsertEmoticon, Gif, Mic, Stop, Lock, Public, Brush, SmartToy, Search, Forward, Schedule, Translate, Reply, LocationOn, Poll } from '@mui/icons-material';
+import { Send, AttachFile, Close, InsertEmoticon, Gif, Mic, Stop, Lock, Public, Brush, SmartToy, Search, Forward, Schedule, Translate, Reply, LocationOn, Poll, MoreVert, Add } from '@mui/icons-material';
 import { useTheme } from '../context/ThemeContext';
 import AnimatedButton from './AnimatedButton';
 import GamesMenu from './GamesMenu';
@@ -33,6 +39,7 @@ const DrawingPad = React.lazy(() => import('./DrawingPad'));
 
 export default function MessageInput({ onSend = () => {}, socket, user, room, onTyping, replyTo, onCancelReply, onDiceRoll, onCoinFlip, onRPSPlay, onRPSStart, onTriviaAnswer, onAIRequest, aiTyping = false, onCreatePoll, onShareLocation, onScheduleMessage, onForwardMessage }) {
   const { darkMode, getFontSizeValue } = useTheme() || {};
+  const { isMobile, isSmallMobile } = useResponsive();
   const { settings: translationSettings, updateSettings: updateTranslationSettings } = useTranslation();
   const [text, setText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -45,6 +52,7 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
   const [isRecording, setIsRecording] = useState(false);
   const [voiceMessageReady, setVoiceMessageReady] = useState(false);
   const [imagePrivacy, setImagePrivacy] = useState('friends'); // 'public' or 'friends'
+  const [showMoreActions, setShowMoreActions] = useState(false);
   
   // New feature states
   const [showMessageSearch, setShowMessageSearch] = useState(false);
@@ -61,6 +69,85 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
   const emojiButtonRef = useRef(null);
   const gifButtonRef = useRef(null);
   const templatesButtonRef = useRef(null);
+
+  const handleVoiceSend = useCallback(async () => {
+    if (voiceBlob) {
+      // Send voice message via API
+      try {
+        const formData = new FormData();
+        // Ensure file has correct mime type and extension to satisfy backend checks
+        const mime = voiceBlob.type || 'audio/webm';
+        const ext = mime.split('/')[1] ? mime.split('/')[1].split(';')[0] : 'webm';
+        const voiceFile = new File([voiceBlob], `voice_message.${ext}`, { type: mime });
+        formData.append('file', voiceFile);
+        formData.append('room_id', room.id);
+        formData.append('sender', user.username);
+        formData.append('recipient', '');
+
+        const response = await fetch(`${config.API_URL}/messages/send_file`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: formData,
+        });
+
+        if (response.ok) {
+          setVoiceBlob(null);
+          setVoiceMessageReady(false);
+          setIsRecording(false);
+          // The message will be received via socket
+        } else {
+          // Try to get error details from response
+          let errorMessage = 'Failed to send voice message';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.detail || errorMessage;
+          } catch (e) {
+            // If response is not JSON, use status text
+            errorMessage = response.statusText || errorMessage;
+          }
+          console.error('Failed to send voice message:', errorMessage);
+          alert(`Voice upload failed: ${errorMessage}`);
+        }
+      } catch (error) {
+        console.error('Error sending voice message:', error);
+        alert(`Voice upload failed: ${error.message}`);
+      }
+    }
+  }, [voiceBlob, room, user]);
+
+  // Event handlers to prevent arrow functions in JSX
+  const handleSetFriendsPrivacy = useCallback(() => setImagePrivacy('friends'), []);
+  const handleSetPublicPrivacy = useCallback(() => setImagePrivacy('public'), []);
+  const handleCancelReply = useCallback((e) => {
+    e.stopPropagation();
+    if (onCancelReply) onCancelReply();
+  }, [onCancelReply]);
+  const handleToggleEmojiPicker = useCallback(() => setShowEmojiPicker(!showEmojiPicker), [showEmojiPicker]);
+  const handleToggleGifPicker = useCallback(() => setShowGifPicker(!showGifPicker), [showGifPicker]);
+  const handleShowDrawingPad = useCallback(() => setShowDrawingPad(true), []);
+  const handleShowQuickTemplates = useCallback(() => setShowQuickTemplates(true), []);
+  const handleShowMessageSearch = useCallback(() => setShowMessageSearch(true), []);
+  const handleShowPollCreator = useCallback(() => setShowPollCreator(true), []);
+  const handleShowLocationPicker = useCallback(() => setShowLocationPicker(true), []);
+  const handleShowScheduleDialog = useCallback(() => setShowScheduleDialog(true), []);
+  const handleShowTranslationSettings = useCallback(() => setShowTranslationSettings(true), []);
+  const handleVoiceAction = useCallback(() => {
+    if (voiceMessageReady) {
+      handleVoiceSend();
+      setVoiceMessageReady(false);
+      setIsRecording(false);
+    } else {
+      setIsRecording(true);
+    }
+  }, [voiceMessageReady, handleVoiceSend]);
+  const handleFileClick = useCallback(() => fileInputRef.current?.click(), []);
+  const handleAIRequest = useCallback(() => {
+    if (onAIRequest && text.trim() && !aiTyping) {
+      onAIRequest(text);
+    }
+  }, [onAIRequest, text, aiTyping]);
 
   const handleSend = async () => {
     if (voiceBlob && voiceMessageReady) {
@@ -291,53 +378,6 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
     setVoiceMessageReady(true);
   };
 
-  const handleVoiceSend = async () => {
-    if (voiceBlob) {
-      // Send voice message via API
-      try {
-        const formData = new FormData();
-        // Ensure file has correct mime type and extension to satisfy backend checks
-        const mime = voiceBlob.type || 'audio/webm';
-        const ext = mime.split('/')[1] ? mime.split('/')[1].split(';')[0] : 'webm';
-        const voiceFile = new File([voiceBlob], `voice_message.${ext}`, { type: mime });
-        formData.append('file', voiceFile);
-        formData.append('room_id', room.id);
-        formData.append('sender', user.username);
-        formData.append('recipient', '');
-
-        const response = await fetch(`${config.API_URL}/messages/send_file`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: formData,
-        });
-
-        if (response.ok) {
-          setVoiceBlob(null);
-          setVoiceMessageReady(false);
-          setIsRecording(false);
-          // The message will be received via socket
-        } else {
-          // Try to get error details from response
-          let errorMessage = 'Failed to send voice message';
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.detail || errorMessage;
-          } catch (e) {
-            // If response is not JSON, use status text
-            errorMessage = response.statusText || errorMessage;
-          }
-          console.error('Failed to send voice message:', errorMessage);
-          alert(`Voice upload failed: ${errorMessage}`);
-        }
-      } catch (error) {
-        console.error('Error sending voice message:', error);
-        alert(`Voice upload failed: ${error.message}`);
-      }
-    }
-  };
-
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -366,6 +406,16 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
     }
   };
 
+  // Mobile action items for SpeedDial - use useCallback to prevent re-renders
+  const mobileActions = useMemo(() => [
+    { icon: <InsertEmoticon />, name: 'Emoji', onClick: handleToggleEmojiPicker },
+    { icon: <Gif />, name: 'GIF', onClick: handleToggleGifPicker },
+    { icon: <Brush />, name: 'Draw', onClick: handleShowDrawingPad },
+    { icon: <AttachFile />, name: 'Attach', onClick: handleFileClick },
+    { icon: <Poll />, name: 'Poll', onClick: handleShowPollCreator },
+    { icon: <LocationOn />, name: 'Location', onClick: handleShowLocationPicker },
+  ], [handleToggleEmojiPicker, handleToggleGifPicker, handleShowDrawingPad, handleFileClick, handleShowPollCreator, handleShowLocationPicker]);
+
   const handleSelectTemplate = (templateText) => {
     setText(templateText);
   };
@@ -379,13 +429,14 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
     <Box
       ref={dropZoneRef}
       sx={{
-        p: 3,
+        p: isMobile ? 2 : 3,
         border: isDragOver ? '2px dashed' : 'none',
         borderColor: isDragOver ? 'primary.main' : 'transparent',
         borderRadius: 3,
         backgroundColor: isDragOver ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         transform: isDragOver ? 'scale(1.02)' : 'scale(1)',
+        position: 'relative',
       }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -470,7 +521,7 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
                 <Button
                   size="small"
                   variant={imagePrivacy === 'friends' ? 'contained' : 'outlined'}
-                  onClick={() => setImagePrivacy('friends')}
+                  onClick={handleSetFriendsPrivacy}
                   startIcon={<Lock />}
                 >
                   Friends
@@ -478,7 +529,7 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
                 <Button
                   size="small"
                   variant={imagePrivacy === 'public' ? 'contained' : 'outlined'}
-                  onClick={() => setImagePrivacy('public')}
+                  onClick={handleSetPublicPrivacy}
                   startIcon={<Public />}
                 >
                   Public
@@ -489,30 +540,23 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
         </Box>
       )}
 
-      {/* Reply preview when replying to a message */}
-      {replyTo && (
-        <Paper sx={{ p: 1, mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'background.paper' }} elevation={1}>
-          <Box sx={{ overflow: 'hidden', mr: 1 }}>
-            <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{replyTo.sender}</Typography>
-            <Typography variant="body2" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{replyTo.content || replyTo.plain_text || '[message]'}</Typography>
-          </Box>
-          <Box>
-            <Button size="small" onClick={(e) => { e.stopPropagation(); if (onCancelReply) onCancelReply(); }}>Cancel</Button>
-          </Box>
-        </Paper>
-      )}
+
 
       <TextField
         fullWidth
         multiline
         minRows={1}
-        maxRows={6}
+        maxRows={isMobile ? 3 : 6}
         value={text}
         onChange={handleInputChange}
         onKeyPress={handleKeyPress}
         placeholder={isDragOver ? "Drop files here..." : "Type a message..."}
         variant="outlined"
-        helperText={`${text.length}/1000`}
+        helperText={!isMobile ? (
+          <span style={{ color: text.length > 900 ? '#f44336' : 'inherit' }}>
+            {text.length}/1000 {text.length > 900 && '⚠️ Approaching limit'}
+          </span>
+        ) : undefined}
         sx={{
           '& .MuiOutlinedInput-root': {
             borderRadius: 3,
@@ -521,7 +565,7 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
               : 'rgba(255, 255, 255, 0.9)',
             backdropFilter: 'blur(10px)',
             color: darkMode ? '#f1f5f9' : 'inherit',
-            fontSize: getFontSizeValue ? getFontSizeValue() : '16px',
+            fontSize: getFontSizeValue ? getFontSizeValue() : (isMobile ? '16px' : '16px'), // Prevent zoom on iOS
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             border: `1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.3)'}`,
             '& fieldset': {
@@ -531,7 +575,7 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
               backgroundColor: darkMode 
                 ? 'rgba(30, 41, 59, 0.9)'
                 : 'rgba(255, 255, 255, 0.95)',
-              transform: 'translateY(-1px)',
+              transform: !isMobile ? 'translateY(-1px)' : 'none',
               boxShadow: darkMode 
                 ? '0 8px 25px rgba(0, 0, 0, 0.3)'
                 : '0 8px 25px rgba(0, 0, 0, 0.1)',
@@ -543,12 +587,12 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
               border: '2px solid',
               borderColor: 'primary.main',
               boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)',
-              transform: 'translateY(-2px)',
+              transform: !isMobile ? 'translateY(-2px)' : 'none',
             },
           },
           '& .MuiInputBase-input': {
             color: darkMode ? '#f1f5f9' : 'inherit',
-            padding: '16px 20px',
+            padding: isMobile ? '12px 16px' : '16px 20px',
           },
           '& .MuiInputBase-input::placeholder': {
             color: darkMode ? '#94a3b8' : 'rgba(0, 0, 0, 0.6)',
@@ -569,210 +613,255 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
           endAdornment: (
             <InputAdornment position="end">
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <AnimatedButton
-                  ref={emojiButtonRef}
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  size="small"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'primary.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <InsertEmoticon />
-                </AnimatedButton>
-                <AnimatedButton
-                  ref={gifButtonRef}
-                  onClick={() => setShowGifPicker(!showGifPicker)}
-                  size="small"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'secondary.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <Gif />
-                </AnimatedButton>
-                <IconButton
-                  onClick={() => setShowDrawingPad(true)}
-                  title="Draw"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'success.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <Brush />
-                </IconButton>
-                <IconButton
-                  ref={templatesButtonRef}
-                  onClick={() => setShowQuickTemplates(true)}
-                  title="Quick Templates"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'info.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <Reply />
-                </IconButton>
-                <IconButton
-                  onClick={() => setShowMessageSearch(true)}
-                  title="Search Messages"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'warning.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <Search />
-                </IconButton>
-                <IconButton
-                  onClick={() => setShowPollCreator(true)}
-                  title="Create Poll"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'primary.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <Poll />
-                </IconButton>
-                <IconButton
-                  onClick={() => setShowLocationPicker(true)}
-                  title="Share Location"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'error.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <LocationOn />
-                </IconButton>
-                <IconButton
-                  onClick={() => setShowScheduleDialog(true)}
-                  title="Schedule Message"
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'secondary.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <Schedule />
-                </IconButton>
-                <TranslationButton
-                  onOpenSettings={() => setShowTranslationSettings(true)}
-                  settings={translationSettings}
-                />
-                <IconButton
-                  onClick={() => {
-                    if (voiceMessageReady) {
-                      handleVoiceSend();
-                      setVoiceMessageReady(false);
-                      setIsRecording(false);
-                    } else {
-                      setIsRecording(true);
-                    }
-                  }}
-                  sx={{
-                    borderRadius: 2,
-                    color: voiceMessageReady ? 'success.main' : isRecording ? 'error.main' : 'inherit',
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: voiceMessageReady ? 'success.main' : isRecording ? 'error.main' : 'warning.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  {voiceMessageReady ? <Send /> : isRecording ? <Stop /> : <Mic />}
-                </IconButton>
-                <input
-                  type="file"
-                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
-                  style={{ display: 'none' }}
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                />
-                <IconButton 
-                  onClick={() => fileInputRef.current.click()}
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'info.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                  }}
-                >
-                  <AttachFile />
-                </IconButton>
-                <IconButton
-                  onClick={() => {
-                    if (onAIRequest && text.trim() && !aiTyping) {
-                      onAIRequest(text);
-                    }
-                  }}
-                  title={aiTyping ? "AI is processing..." : "Ask AI"}
-                  disabled={!text.trim() || aiTyping}
-                  sx={{
-                    borderRadius: 2,
-                    transition: 'all 0.2s ease',
-                    '&:hover:not(:disabled)': {
-                      backgroundColor: 'primary.main',
-                      color: 'white',
-                      transform: 'scale(1.1)',
-                    },
-                    '&:disabled': {
-                      opacity: 0.5,
-                    },
-                  }}
-                >
-                  <SmartToy />
-                </IconButton>
-                <GamesMenu
-                  socket={socket}
-                  user={user}
-                  room={room}
-                  onDiceRoll={onDiceRoll}
-                  onCoinFlip={onCoinFlip}
-                  onRPSPlay={onRPSPlay}
-                  onRPSStart={onRPSStart}
-                  onTriviaAnswer={onTriviaAnswer}
-                />
+                {/* Desktop: Show all buttons */}
+                {!isMobile && (
+                  <>
+                    <AnimatedButton
+                      ref={emojiButtonRef}
+                      onClick={handleToggleEmojiPicker}
+                      size="small"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <InsertEmoticon />
+                    </AnimatedButton>
+                    <AnimatedButton
+                      ref={gifButtonRef}
+                      onClick={handleToggleGifPicker}
+                      size="small"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'secondary.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <Gif />
+                    </AnimatedButton>
+                    <IconButton
+                      onClick={handleShowDrawingPad}
+                      title="Draw"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'success.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <Brush />
+                    </IconButton>
+                    <IconButton
+                      ref={templatesButtonRef}
+                      onClick={handleShowQuickTemplates}
+                      title="Quick Templates"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'info.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <Reply />
+                    </IconButton>
+                    <IconButton
+                      onClick={handleShowMessageSearch}
+                      title="Search Messages"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'warning.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <Search />
+                    </IconButton>
+                    <IconButton
+                      onClick={handleShowPollCreator}
+                      title="Create Poll"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <Poll />
+                    </IconButton>
+                    <IconButton
+                      onClick={handleShowLocationPicker}
+                      title="Share Location"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'error.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <LocationOn />
+                    </IconButton>
+                    <IconButton
+                      onClick={handleShowScheduleDialog}
+                      title="Schedule Message"
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'secondary.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <Schedule />
+                    </IconButton>
+                    <TranslationButton
+                      onOpenSettings={handleShowTranslationSettings}
+                      settings={translationSettings}
+                    />
+                    <IconButton
+                      onClick={handleVoiceAction}
+                      sx={{
+                        borderRadius: 2,
+                        color: voiceMessageReady ? 'success.main' : isRecording ? 'error.main' : 'inherit',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: voiceMessageReady ? 'success.main' : isRecording ? 'error.main' : 'warning.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      {voiceMessageReady ? <Send /> : isRecording ? <Stop /> : <Mic />}
+                    </IconButton>
+                    <input
+                      type="file"
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+                      style={{ display: 'none' }}
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                    />
+                    <IconButton 
+                      onClick={handleFileClick}
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: 'info.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                    >
+                      <AttachFile />
+                    </IconButton>
+                    <IconButton
+                      onClick={handleAIRequest}
+                      title={aiTyping ? "AI is processing..." : "Ask AI"}
+                      disabled={!text.trim() || aiTyping}
+                      sx={{
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease',
+                        '&:hover:not(:disabled)': {
+                          backgroundColor: 'primary.main',
+                          color: 'white',
+                          transform: 'scale(1.1)',
+                        },
+                        '&:disabled': {
+                          opacity: 0.5,
+                        },
+                      }}
+                    >
+                      <SmartToy />
+                    </IconButton>
+                    <GamesMenu
+                      socket={socket}
+                      user={user}
+                      room={room}
+                      onDiceRoll={onDiceRoll}
+                      onCoinFlip={onCoinFlip}
+                      onRPSPlay={onRPSPlay}
+                      onRPSStart={onRPSStart}
+                      onTriviaAnswer={onTriviaAnswer}
+                    />
+                  </>
+                )}
+                
+                {/* Mobile: Show only essential buttons */}
+                {isMobile && (
+                  <>
+                    <IconButton
+                      ref={emojiButtonRef}
+                      onTouchStart={handleToggleEmojiPicker}
+                      onClick={handleToggleEmojiPicker}
+                      size="small"
+                      sx={{ 
+                        p: 1,
+                        touchAction: 'manipulation',
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                    >
+                      <InsertEmoticon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      onTouchStart={handleVoiceAction}
+                      onClick={handleVoiceAction}
+                      size="small"
+                      sx={{ 
+                        p: 1,
+                        color: voiceMessageReady ? 'success.main' : isRecording ? 'error.main' : 'inherit',
+                        touchAction: 'manipulation',
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                    >
+                      {voiceMessageReady ? <Send fontSize="small" /> : isRecording ? <Stop fontSize="small" /> : <Mic fontSize="small" />}
+                    </IconButton>
+                    <input
+                      type="file"
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+                      style={{ display: 'none' }}
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                    />
+                    <IconButton 
+                      onTouchStart={handleFileClick}
+                      onClick={handleFileClick}
+                      size="small"
+                      sx={{ 
+                        p: 1,
+                        touchAction: 'manipulation',
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                    >
+                      <AttachFile fontSize="small" />
+                    </IconButton>
+                  </>
+                )}
+                
                 <IconButton 
                   onClick={handleSend} 
                   disabled={!text.trim() && !media && !voiceMessageReady}
@@ -781,6 +870,8 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
                     background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                     color: 'white',
                     ml: 1,
+                    p: isMobile ? 1 : 1.5,
+                    minWidth: isMobile ? 40 : 48,
                     transition: 'all 0.2s ease',
                     '&:hover:not(:disabled)': {
                       background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
@@ -793,13 +884,42 @@ export default function MessageInput({ onSend = () => {}, socket, user, room, on
                     },
                   }}
                 >
-                  <Send />
+                  <Send fontSize={isMobile ? 'small' : 'medium'} />
                 </IconButton>
               </Box>
             </InputAdornment>
           ),
         }}
       />
+      {/* Mobile SpeedDial for additional actions */}
+      {isMobile && (
+        <SpeedDial
+          ariaLabel="More actions"
+          sx={{ 
+            position: 'absolute', 
+            bottom: 16, 
+            right: 16,
+            '& .MuiFab-primary': {
+              backgroundColor: 'primary.main',
+              '&:hover': {
+                backgroundColor: 'primary.dark',
+              },
+            },
+          }}
+          icon={<SpeedDialIcon />}
+          direction="up"
+        >
+          {mobileActions.map((action) => (
+            <SpeedDialAction
+              key={action.name}
+              icon={action.icon}
+              tooltipTitle={action.name}
+              onClick={action.onClick}
+            />
+          ))}
+        </SpeedDial>
+      )}
+
       {aiTyping && (
         <LinearProgress sx={{ mt: 1 }} />
       )}

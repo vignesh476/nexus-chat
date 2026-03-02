@@ -37,6 +37,7 @@ const PollCreator = ({ open, onClose, onCreatePoll }) => {
   const [options, setOptions] = useState(['', '']);
   const [allowMultiple, setAllowMultiple] = useState(false);
   const [anonymous, setAnonymous] = useState(false);
+  const [expiresIn, setExpiresIn] = useState('never');
 
   const addOption = () => {
     if (options.length < 10) {
@@ -59,16 +60,29 @@ const PollCreator = ({ open, onClose, onCreatePoll }) => {
   const handleCreate = () => {
     const validOptions = options.filter(opt => opt.trim());
     if (question.trim() && validOptions.length >= 2) {
+      const getExpirationDate = () => {
+        if (expiresIn === 'never') return null;
+        const now = new Date();
+        switch (expiresIn) {
+          case '1h': return new Date(now.getTime() + 60 * 60 * 1000);
+          case '24h': return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+          case '7d': return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+          default: return null;
+        }
+      };
+      
       onCreatePoll({
         question: question.trim(),
         options: validOptions,
         allow_multiple: allowMultiple,
         anonymous,
+        expires_at: getExpirationDate()
       });
       setQuestion('');
       setOptions(['', '']);
       setAllowMultiple(false);
       setAnonymous(false);
+      setExpiresIn('never');
       onClose();
     }
   };
@@ -133,6 +147,40 @@ const PollCreator = ({ open, onClose, onCreatePoll }) => {
             Anonymous
           </Button>
         </Box>
+
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          Poll Duration:
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+          <Button
+            variant={expiresIn === 'never' ? 'contained' : 'outlined'}
+            onClick={() => setExpiresIn('never')}
+            size="small"
+          >
+            Never
+          </Button>
+          <Button
+            variant={expiresIn === '1h' ? 'contained' : 'outlined'}
+            onClick={() => setExpiresIn('1h')}
+            size="small"
+          >
+            1 Hour
+          </Button>
+          <Button
+            variant={expiresIn === '24h' ? 'contained' : 'outlined'}
+            onClick={() => setExpiresIn('24h')}
+            size="small"
+          >
+            24 Hours
+          </Button>
+          <Button
+            variant={expiresIn === '7d' ? 'contained' : 'outlined'}
+            onClick={() => setExpiresIn('7d')}
+            size="small"
+          >
+            7 Days
+          </Button>
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
@@ -178,7 +226,8 @@ const PollComponent = ({ poll, onVote, currentUser, socket }) => {
 
   const handleVote = () => {
     if (selectedOptions.length > 0) {
-      onVote(poll._id, selectedOptions);
+      const optionStrings = selectedOptions.map(index => poll.options[index]);
+      onVote(poll._id, optionStrings);
       setHasVoted(true);
     }
   };

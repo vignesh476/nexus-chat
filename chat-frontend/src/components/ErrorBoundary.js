@@ -1,99 +1,112 @@
 import React from 'react';
-import { Box, Typography, Button, Alert } from '@mui/material';
-import { Refresh, BugReport } from '@mui/icons-material';
+import { Box, Typography, Button, Paper } from '@mui/material';
+import { ErrorOutline, Refresh } from '@mui/icons-material';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { 
-      hasError: false, 
-      error: null, 
-      errorInfo: null,
-      retryCount: 0
-    };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    this.setState({ errorInfo });
+    this.setState({
+      error: error,
+      errorInfo: errorInfo
+    });
     
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'production') {
       console.error('Error caught by boundary:', error, errorInfo);
     }
-    
-    // In production, you would send this to an error reporting service
-    // Example: Sentry.captureException(error, { extra: errorInfo });
   }
 
-  handleRetry = () => {
-    this.setState(prevState => ({
-      hasError: false,
-      error: null,
-      errorInfo: null,
-      retryCount: prevState.retryCount + 1
-    }));
+  handleReload = () => {
+    window.location.reload();
+  };
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null });
   };
 
   render() {
     if (this.state.hasError) {
-      const { fallback: Fallback } = this.props;
-      
-      if (Fallback) {
-        return <Fallback error={this.state.error} retry={this.handleRetry} />;
-      }
-
       return (
-        <Box sx={{ p: 4, textAlign: 'center', maxWidth: 600, mx: 'auto' }}>
-          <BugReport sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
-          
-          <Typography variant="h5" color="error" gutterBottom>
-            Oops! Something went wrong
-          </Typography>
-          
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            We're sorry for the inconvenience. The application encountered an unexpected error.
-          </Typography>
-
-          {process.env.NODE_ENV === 'development' && this.state.error && (
-            <Alert severity="error" sx={{ mb: 3, textAlign: 'left' }}>
-              <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
-                {this.state.error.toString()}
-                {this.state.errorInfo?.componentStack}
-              </Typography>
-            </Alert>
-          )}
-
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-            <Button 
-              variant="contained" 
-              startIcon={<Refresh />}
-              onClick={this.handleRetry}
-              disabled={this.state.retryCount >= 3}
-            >
-              {this.state.retryCount >= 3 ? 'Max retries reached' : 'Try Again'}
-            </Button>
-            
-            <Button 
-              variant="outlined" 
-              onClick={() => window.location.reload()}
-            >
-              Reload Page
-            </Button>
-          </Box>
-          
-          {this.state.retryCount > 0 && (
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-              Retry attempts: {this.state.retryCount}/3
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100vh',
+            p: 3,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          }}
+        >
+          <Paper
+            elevation={8}
+            sx={{
+              p: 4,
+              maxWidth: 500,
+              textAlign: 'center',
+              borderRadius: 3,
+            }}
+          >
+            <ErrorOutline sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+            <Typography variant="h4" gutterBottom>
+              Oops! Something went wrong
             </Typography>
-          )}
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              We are sorry for the inconvenience. The application encountered an unexpected error.
+            </Typography>
+            
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+              <Button
+                variant="contained"
+                startIcon={<Refresh />}
+                onClick={this.handleReload}
+                sx={{ minWidth: 120 }}
+              >
+                Reload Page
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={this.handleReset}
+                sx={{ minWidth: 120 }}
+              >
+                Try Again
+              </Button>
+            </Box>
+            
+            {process.env.NODE_ENV === 'development' && this.state.error && (
+              <Box sx={{ mt: 3, textAlign: 'left' }}>
+                <Typography variant="h6" color="error" gutterBottom>
+                  Error Details (Development Only):
+                </Typography>
+                <Typography
+                  variant="body2"
+                  component="pre"
+                  sx={{
+                    background: '#f5f5f5',
+                    p: 2,
+                    borderRadius: 1,
+                    overflow: 'auto',
+                    fontSize: '0.75rem',
+                    maxHeight: 200,
+                  }}
+                >
+                  {this.state.error.toString()}
+                  {this.state.errorInfo.componentStack}
+                </Typography>
+              </Box>
+            )}
+          </Paper>
         </Box>
       );
     }
-    
+
     return this.props.children;
   }
 }

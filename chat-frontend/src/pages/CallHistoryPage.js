@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useUserProfiles } from '../context/UserProfileContext';
 import { useCall } from '../context/CallContext';
 import Navigation from '../components/Navigation';
+import useResponsive from '../hooks/useResponsive';
+import { useTheme } from '../context/ThemeContext';
 import {
   Box,
   Typography,
@@ -36,6 +38,7 @@ import {
   ClearAll,
   MoreVert,
   Block,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
 
 const CallHistoryPage = () => {
@@ -43,12 +46,15 @@ const CallHistoryPage = () => {
   const { user } = useAuth();
   const { getUserProfile } = useUserProfiles();
   const { startCall } = useCall();
+  const { darkMode } = useTheme();
+  const { isMobile } = useResponsive();
   const [callHistory, setCallHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [clearAllDialog, setClearAllDialog] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [selectedCall, setSelectedCall] = useState(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -208,9 +214,20 @@ const CallHistoryPage = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', height: '100vh' }}>
-        <Navigation />
-        <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <Box sx={{ 
+        display: 'flex', 
+        minHeight: '100vh',
+        flexDirection: isMobile ? 'column' : 'row'
+      }}>
+        <Navigation mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+        <Box sx={{ 
+          flexGrow: 1, 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          pt: isMobile ? 7 : 0,
+          pb: isMobile ? 10 : 0,
+        }}>
           <CircularProgress />
         </Box>
       </Box>
@@ -219,9 +236,20 @@ const CallHistoryPage = () => {
 
   if (error) {
     return (
-      <Box sx={{ display: 'flex', height: '100vh' }}>
-        <Navigation />
-        <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <Box sx={{ 
+        display: 'flex', 
+        minHeight: '100vh',
+        flexDirection: isMobile ? 'column' : 'row'
+      }}>
+        <Navigation mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+        <Box sx={{ 
+          flexGrow: 1, 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          pt: isMobile ? 7 : 0,
+          pb: isMobile ? 10 : 0,
+        }}>
           <Typography color="error">{error}</Typography>
         </Box>
       </Box>
@@ -229,24 +257,78 @@ const CallHistoryPage = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
-      <Navigation />
-      <Box sx={{ flexGrow: 1, p: 3, overflow: 'auto' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4">
+    <Box sx={{ 
+      display: 'flex', 
+      minHeight: '100vh',
+      flexDirection: isMobile ? 'column' : 'row'
+    }}>
+      <Navigation mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      
+      {/* Mobile Header */}
+      {isMobile && (
+        <Box sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1100,
+          background: darkMode 
+            ? 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)'
+            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: `1px solid ${darkMode ? 'rgba(148, 163, 184, 0.1)' : 'rgba(148, 163, 184, 0.2)'}`,
+          px: 2,
+          py: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+        }}>
+          <IconButton
+            onClick={() => setMobileOpen(true)}
+            sx={{ color: 'text.primary' }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }}>
             Call History
           </Typography>
           {callHistory.length > 0 && (
-            <Button
-              startIcon={<ClearAll />}
+            <IconButton
               onClick={() => setClearAllDialog(true)}
-              color="error"
-              variant="outlined"
+              sx={{ color: 'error.main' }}
             >
-              Clear All
-            </Button>
+              <ClearAll />
+            </IconButton>
           )}
         </Box>
+      )}
+      
+      <Box sx={{ 
+        flexGrow: 1, 
+        p: isMobile ? 2 : 3, 
+        pt: isMobile ? 9 : 3,
+        pb: isMobile ? 12 : 3,
+        overflow: 'auto',
+        maxHeight: '100vh',
+      }}>
+        {/* Desktop Header */}
+        {!isMobile && (
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h4">
+              Call History
+            </Typography>
+            {callHistory.length > 0 && (
+              <Button
+                startIcon={<ClearAll />}
+                onClick={() => setClearAllDialog(true)}
+                color="error"
+                variant="outlined"
+              >
+                Clear All
+              </Button>
+            )}
+          </Box>
+        )}
 
         {callHistory.length === 0 ? (
           <Paper sx={{ p: 4, textAlign: 'center' }}>

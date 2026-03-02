@@ -3,6 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import { useParams } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 import { usersAPI } from '../api';
+import useResponsive from '../hooks/useResponsive';
+import useSettings from '../hooks/useSettings';
+import ProfilePictureDialog from '../components/ProfilePictureDialog';
 import {
   Container,
   Paper,
@@ -33,6 +36,8 @@ import {
   FormLabel,
   CircularProgress,
   LinearProgress,
+  Alert,
+  Snackbar,
 } from '@mui/material';
 import {
   Check,
@@ -41,6 +46,7 @@ import {
   PhotoCamera,
   Public,
   Lock,
+  Save,
 } from '@mui/icons-material';
 import { useTheme } from '../context/ThemeContext';
 
@@ -48,8 +54,7 @@ const ProfilePage = () => {
   const { user, presence, updatePresence, updateUserProfile } = useAuth();
   const { username } = useParams();
   const isOwnProfile = !username || username === user?.username;
-  
-  console.log('ProfilePage Debug:', { username, userUsername: user?.username, isOwnProfile });
+  const { isMobile } = useResponsive();
   
   const { darkMode, messageStyle, chatBackground, primaryColor, accentColor, fontSize, borderRadius, animationsEnabled, toggleDarkMode, updateMessageStyle, updateChatBackground, updatePrimaryColor, updateAccentColor, updateFontSize, updateBorderRadius } = useTheme() || {};
   
@@ -58,19 +63,41 @@ const ProfilePage = () => {
   const [presenceStatus, setPresenceStatus] = useState(presence?.status || 'online');
   const [customStatus, setCustomStatus] = useState(presence?.custom_status || '');
   const [friendRequests, setFriendRequests] = useState({ sent_requests: [], received_requests: [] });
-  const [notificationPreferences, setNotificationPreferences] = useState({ new_messages: true, friend_requests: true, mentions: true });
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [profileData, setProfileData] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Settings management with debounced saving
+  const {
+    settings,
+    updateNestedSetting,
+  } = useSettings({
+    notifications: {
+      new_messages: true,
+      friend_requests: true,
+      mentions: true
+    }
+  });
 
   // Profile Picture State
   const [profilePicture, setProfilePicture] = useState(user?.profile_picture || null);
   const [profilePicturePrivacy, setProfilePicturePrivacy] = useState(user?.profile_privacy || 'public');
   const [profilePictureDialog, setProfilePictureDialog] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [uploadingPicture, setUploadingPicture] = useState(false);
-  const fileInputRef = useRef(null);
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleProfilePictureUpdate = (newPicture) => {
+    setProfilePicture(newPicture);
+    showSnackbar('Profile picture updated successfully!');
+  };
+
+  const handleProfilePicturePrivacyChange = (newPrivacy) => {
+    setProfilePicturePrivacy(newPrivacy);
+    showSnackbar('Privacy settings updated!');
+  };
 
   useEffect(() => {
     if (isOwnProfile) {
@@ -125,10 +152,10 @@ const ProfilePage = () => {
     try {
       await usersAPI.updateProfile({ status, public_key: publicKey });
       updateUserProfile({ status, public_key: publicKey });
-      alert('Profile updated successfully!');
+      showSnackbar('Profile updated successfully!');
     } catch (error) {
       console.error('Failed to update profile:', error);
-      alert('Failed to update profile. Please try again.');
+      showSnackbar('Failed to update profile', 'error');
     }
   };
 
@@ -146,16 +173,37 @@ const ProfilePage = () => {
         ) : (
           <>
             {/* Profile Display Section */}
-            <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+            <Paper elevation={2} sx={{ p: 3, mb: 3 }} className="profile-picture-container">
               <Grid container spacing={3}>
                 <Grid item xs={12} sm={4} sx={{ textAlign: 'center' }}>
                   <Avatar
                     src={isOwnProfile ? profilePicture : profileData?.profile_picture}
-                    sx={{ width: 120, height: 120, mx: 'auto', mb: 2 }}
+                    sx={{ 
+                      width: isMobile ? 100 : 120, 
+                      height: isMobile ? 100 : 120, 
+                      mx: 'auto', 
+                      mb: 2,
+                      border: '4px solid',
+                      borderColor: 'primary.main'
+                    }}
+                    className={isMobile ? 'profile-avatar-mobile' : ''}
                   >
                     {(isOwnProfile ? user?.username : username)?.charAt(0).toUpperCase()}
                   </Avatar>
-                  <Typography variant="h6">{isOwnProfile ? user?.username : username}</Typography>
+                  {isOwnProfile && (
+                    <Button
+                      variant="outlined"
+                      startIcon={<PhotoCamera />}
+                      onClick={() => setProfilePictureDialog(true)}
+                      size={isMobile ? 'medium' : 'small'}
+                      className="mobile-action-button"
+                      fullWidth={isMobile}
+                      sx={{ mt: 1 }}
+                    >
+                      Change Photo
+                    </Button>
+                  )}
+                  <Typography variant="h6" sx={{ mt: 1 }}>{isOwnProfile ? user?.username : username}</Typography>
                 </Grid>
                 <Grid item xs={12} sm={8}>
                   {isOwnProfile ? (
@@ -178,7 +226,14 @@ const ProfilePage = () => {
                         multiline
                         rows={4}
                       />
-                      <Button variant="contained" onClick={handleSave} sx={{ mt: 2 }}>
+                      <Button 
+                        variant="contained" 
+                        onClick={handleSave} 
+                        sx={{ mt: 2 }}
+                        startIcon={<Save />}
+                        className="mobile-action-button"
+                        fullWidth={isMobile}
+                      >
                         Save Changes
                       </Button>
                     </>
@@ -244,21 +299,22 @@ const ProfilePage = () => {
                 </Paper>
 
                 {/* Notification Preferences */}
-                <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+                <Paper elevation={2} sx={{ p: 3, mb: 3 }} className="settings-section">
                   <Typography variant="h5" gutterBottom>Notification Preferences</Typography>
                   <Box sx={{ mt: 2 }}>
-                    <FormControlLabel
-                      control={<Switch checked={notificationPreferences.new_messages} />}
-                      label="New Messages"
-                    />
-                    <FormControlLabel
-                      control={<Switch checked={notificationPreferences.friend_requests} />}
-                      label="Friend Requests"
-                    />
-                    <FormControlLabel
-                      control={<Switch checked={notificationPreferences.mentions} />}
-                      label="Mentions"
-                    />
+                    {Object.entries(settings.notifications || {}).map(([key, value]) => (
+                      <FormControlLabel
+                        key={key}
+                        control={
+                          <Switch 
+                            checked={value} 
+                            onChange={(e) => updateNestedSetting('notifications', key, e.target.checked)}
+                          />
+                        }
+                        label={key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        sx={{ display: 'block', mb: 1 }}
+                      />
+                    ))}
                   </Box>
                 </Paper>
 
@@ -544,6 +600,30 @@ const ProfilePage = () => {
             )}
           </>
         )}
+
+        {/* Snackbar for notifications */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
+          <Alert
+            severity={snackbar.severity}
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+
+        {/* Profile Picture Dialog */}
+        <ProfilePictureDialog
+          open={profilePictureDialog}
+          onClose={() => setProfilePictureDialog(false)}
+          currentPicture={profilePicture}
+          onUpdate={handleProfilePictureUpdate}
+          privacy={profilePicturePrivacy}
+          onPrivacyChange={handleProfilePicturePrivacyChange}
+        />
       </Container>
     </MainLayout>
   );

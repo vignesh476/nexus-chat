@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Paper, Typography, LinearProgress, IconButton } from '@mui/material';
 import { AudioRecorder } from 'react-audio-voice-recorder';
-import CloseIcon from '@mui/icons-material/Close';
-import MicIcon from '@mui/icons-material/Mic';
-import StopIcon from '@mui/icons-material/Stop';
+import Close from '@mui/icons-material/Close';
+import Mic from '@mui/icons-material/Mic';
+import Stop from '@mui/icons-material/Stop';
 
 const VoiceRecorder = ({ onRecordingComplete, onStop }) => {
   const [isRecording, setIsRecording] = useState(false);
@@ -11,11 +11,37 @@ const VoiceRecorder = ({ onRecordingComplete, onStop }) => {
   const [intervalId, setIntervalId] = useState(null);
   const [stopRecordingFn, setStopRecordingFn] = useState(null);
 
+  // Cleanup interval on unmount and when recording stops
+  useEffect(() => {
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [intervalId]);
+
+  // Additional cleanup when component unmounts
+  useEffect(() => {
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        setIntervalId(null);
+      }
+    };
+  }, []);
+
   const handleRecordingStart = () => {
     setIsRecording(true);
     // Start timer
     const interval = setInterval(() => {
-      setRecordingTime(prev => prev + 1);
+      setRecordingTime(prev => {
+        const newTime = prev + 1;
+        // Auto-stop at 5 minutes (300 seconds)
+        if (newTime >= 300 && stopRecordingFn) {
+          stopRecordingFn();
+        }
+        return newTime;
+      });
     }, 1000);
     setIntervalId(interval);
   };
@@ -68,13 +94,13 @@ const VoiceRecorder = ({ onRecordingComplete, onStop }) => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Voice Recorder</Typography>
         <IconButton size="small" onClick={handleStop}>
-          <CloseIcon />
+          <Close />
         </IconButton>
       </Box>
 
       <Box sx={{ textAlign: 'center', mb: 2 }}>
         <Typography variant="h4" color={isRecording ? 'error.main' : 'text.secondary'}>
-          {isRecording ? <MicIcon sx={{ fontSize: '3rem' }} /> : <StopIcon sx={{ fontSize: '3rem' }} />}
+          {isRecording ? <Mic sx={{ fontSize: '3rem' }} /> : <Stop sx={{ fontSize: '3rem' }} />}
         </Typography>
         <Typography variant="h6" sx={{ mt: 1 }}>
           {formatTime(recordingTime)}
@@ -121,7 +147,7 @@ const VoiceRecorder = ({ onRecordingComplete, onStop }) => {
                     height: 60,
                   }}
                 >
-                  <MicIcon sx={{ fontSize: '2rem' }} />
+                  <Mic sx={{ fontSize: '2rem' }} />
                 </IconButton>
               ) : (
                 <IconButton
@@ -140,7 +166,7 @@ const VoiceRecorder = ({ onRecordingComplete, onStop }) => {
                     height: 60,
                   }}
                 >
-                  <StopIcon sx={{ fontSize: '2rem' }} />
+                  <Stop sx={{ fontSize: '2rem' }} />
                 </IconButton>
               )}
             </Box>
@@ -149,7 +175,7 @@ const VoiceRecorder = ({ onRecordingComplete, onStop }) => {
       />
 
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
-        {isRecording ? 'Recording... Tap stop when finished' : 'Tap the mic to start recording'}
+        {isRecording ? `Recording... ${recordingTime >= 270 ? '⚠️ Max 5 min' : 'Tap stop when finished'}` : 'Tap the mic to start recording'}
       </Typography>
     </Paper>
   );

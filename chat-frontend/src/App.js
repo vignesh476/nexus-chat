@@ -9,6 +9,10 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { MoodProvider } from './context/MoodContext';
 import { CallProvider } from './context/CallContext';
 import GlobalCallNotification from './components/GlobalCallNotification';
+import ErrorBoundary from './components/ErrorBoundary';
+import './styles/mobile.css';
+import './styles/mobile-chat.css';
+import './styles/mobile-chat-improvements.css';
 
 
 
@@ -18,7 +22,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const RoomListPage = lazy(() => import('./pages/RoomListPage'));
 const ChatRoomPage = lazy(() => import('./pages/ChatRoomPage.jsx'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const EnhancedProfilePage = lazy(() => import('./pages/EnhancedProfilePage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const CallHistoryPage = lazy(() => import('./pages/CallHistoryPage'));
 
@@ -30,8 +34,8 @@ const LoadingFallback = () => (
   </div>
 );
 
-// Simple error boundary for production stability
-class ErrorBoundary extends React.Component {
+// Production-ready error boundary
+class SimpleErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false };
@@ -75,11 +79,11 @@ const AppRoutes = () => {
         />
         <Route
           path="/profile"
-          element={user ? <ProfilePage /> : <Navigate to="/login" />}
+          element={user ? <EnhancedProfilePage /> : <Navigate to="/login" />}
         />
         <Route
           path="/profile/:username"
-          element={user ? <ProfilePage /> : <Navigate to="/login" />}
+          element={user ? <EnhancedProfilePage /> : <Navigate to="/login" />}
         />
         <Route
           path="/notifications"
@@ -130,7 +134,9 @@ function AppContent() {
               <NotificationProvider>
                 <Router>
                   <ErrorBoundary>
-                    <AppRoutes />
+                    <SimpleErrorBoundary>
+                      <AppRoutes />
+                    </SimpleErrorBoundary>
                   </ErrorBoundary>
                   <GlobalCallNotification />  {/* ✅ KEEP THIS ONE */}
                 </Router>

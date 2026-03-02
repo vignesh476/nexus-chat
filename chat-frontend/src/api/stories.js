@@ -1,17 +1,39 @@
 // Use explicit API base (env override) to avoid hitting the React dev server root
+import storiesCache from '../services/storiesCache';
+
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const base = `${API_BASE.replace(/\/+$|$/, '')}/stories`;
 
 export async function getStories() {
+  // Try cache first
+  const cached = await storiesCache.getStories();
+  if (cached) {
+    return cached;
+  }
+
   const res = await fetch(`${base}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
   if (!res.ok) throw new Error('Failed to fetch stories');
-  return res.json();
+  const stories = await res.json();
+  
+  // Cache the results
+  await storiesCache.setStories(stories);
+  return stories;
 }
 
 export async function getUserStories(username) {
+  // Try cache first
+  const cached = await storiesCache.getStories(username);
+  if (cached) {
+    return cached;
+  }
+
   const res = await fetch(`${base}/${username}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
   if (!res.ok) throw new Error('Failed to fetch user stories');
-  return res.json();
+  const stories = await res.json();
+  
+  // Cache the results
+  await storiesCache.setStories(stories, username);
+  return stories;
 }
 
 export async function createStory({ story_type, content, interactive, privacy = 'everyone', allowed_viewers = [], file }) {
@@ -33,6 +55,10 @@ export async function createStory({ story_type, content, interactive, privacy = 
     throw new Error(j.detail || 'Failed to create story');
   }
   const j = await res.json();
+  
+  // Invalidate cache after creating story
+  await storiesCache.invalidateStories();
+  
   // Try to return the created story by refreshing the feed and matching id
   try {
     if (j.story_id) {
@@ -59,6 +85,10 @@ export async function interactStory(story_id, action, payload) {
     body: fd
   });
   if (!res.ok) throw new Error('Failed to interact with story');
+  
+  // Invalidate cache after interaction
+  await storiesCache.invalidateStories();
+  
   return res.json();
 }
 
@@ -68,6 +98,10 @@ export async function highlightStory(story_id) {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
   });
   if (!res.ok) throw new Error('Failed to highlight story');
+  
+  // Invalidate cache after highlighting
+  await storiesCache.invalidateStories();
+  
   return res.json();
 }
 
@@ -77,5 +111,9 @@ export async function deleteStory(story_id) {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
   });
   if (!res.ok) throw new Error('Failed to delete story');
+  
+  // Invalidate cache after deletion
+  await storiesCache.invalidateStories();
+  
   return res.json();
 }

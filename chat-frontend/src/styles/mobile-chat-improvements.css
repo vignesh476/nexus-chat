@@ -1,0 +1,85 @@
+/* MOBILE CHAT IMPROVEMENTS - WCAG AA COMPLIANT */
+
+@media (max-width: 768px) {
+  /* Better contrast for timestamps */
+  .message-timestamp {
+    font-size: 12px !important;
+    opacity: 0.85 !important;
+    font-weight: 500 !important;
+    margin-top: 6px !important;
+  }
+  
+  /* Light mode timestamps */
+  .message-bubble.current-user .message-timestamp {
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  .message-bubble.other-user .message-timestamp {
+    color: rgba(0, 0, 0, 0.75) !important;
+  }
+  
+  /* Dark mode timestamps */
+  @media (prefers-color-scheme: dark) {
+    .message-bubble.current-user .message-timestamp {
+      color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    .message-bubble.other-user .message-timestamp {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+  }
+  
+  /* Better message bubble contrast */
+  .message-bubble.current-user {
+    background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%) !important;
+    color: #ffffff !important;
+  }
+  
+  .message-bubble.other-user {
+    background: #e5e7eb !important;
+    color: #1a202c !important;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .message-bubble.other-user {
+      background: #2d3748 !important;
+      color: #f7fafc !important;
+    }
+  }
+  
+  /* Improved sender name visibility */
+  .message-sender {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
+    color: rgba(0, 0, 0, 0.8) !important;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .message-sender {
+      color: rgba(255, 255, 255, 0.9) !important;
+    }
+  }
+  
+  /* Better line height for readability */
+  .message-text {
+    line-height: 1.5 !important;
+    letter-spacing: 0.01em !important;
+  }
+  
+  /* Message grouping - consecutive messages */
+  .message-bubble.consecutive {
+    margin-top: 2px !important;
+  }
+  
+  .message-bubble.first-in-group {
+    margin-top: 12px !important;
+  }
+  
+  /* Better spacing */
+  .message-bubble {
+    margin: 4px 8px !important;
+    padding: 7px 12px 8px !important;
+    min-height: 40px !important;
+  }
+}

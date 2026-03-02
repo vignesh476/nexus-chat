@@ -28,7 +28,7 @@ const LocationPicker = ({ open, onClose, onShareLocation }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [liveSharing, setLiveSharing] = useState(false);
-  const [duration, setDuration] = useState(15); // minutes
+  const [duration, setDuration] = useState(15);
 
   const getCurrentLocation = () => {
     setLoading(true);
@@ -158,41 +158,9 @@ const LocationPicker = ({ open, onClose, onShareLocation }) => {
 
         {currentLocation && (
           <Box sx={{ mb: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={liveSharing}
-                  onChange={(e) => setLiveSharing(e.target.checked)}
-                />
-              }
-              label="Share Live Location"
-            />
-            
-            {liveSharing && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 2 }}>
-                <Typography variant="body2" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                  <AccessTime sx={{ mr: 1, fontSize: 16 }} />
-                  Duration: {duration} minutes
-                </Typography>
-                
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  {[15, 30, 60].map((mins) => (
-                    <Button
-                      key={mins}
-                      size="small"
-                      variant={duration === mins ? 'contained' : 'outlined'}
-                      onClick={() => setDuration(mins)}
-                    >
-                      {mins}m
-                    </Button>
-                  ))}
-                </Box>
-                
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Your location will be shared in real-time for the selected duration
-                </Typography>
-              </Box>
-            )}
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Note: Live location sharing coming soon
+            </Typography>
           </Box>
         )}
 
@@ -226,7 +194,6 @@ const LocationPicker = ({ open, onClose, onShareLocation }) => {
 
 const LocationMessage = ({ location, sender, timestamp }) => {
   const mapUrl = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`;
-  const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${location.latitude},${location.longitude}&zoom=15&size=300x200&markers=color:red%7C${location.latitude},${location.longitude}&key=YOUR_API_KEY`;
 
   const formatCoordinates = (lat, lng) => {
     return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
@@ -282,7 +249,7 @@ const LocationMessage = ({ location, sender, timestamp }) => {
         )}
       </Box>
 
-      {/* Static Map Preview */}
+      {/* Map Preview */}
       <Box
         sx={{
           width: '100%',

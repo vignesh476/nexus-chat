@@ -7,6 +7,7 @@ import { useCall } from '../context/CallContext';
 import { useTheme } from '../context/ThemeContext';
 import { messagesAPI, roomsAPI } from '../api';
 import MainLayout from '../layouts/MainLayout';
+import useResponsive from '../hooks/useResponsive';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Box,
@@ -27,6 +28,8 @@ import {
 
 import MessageList from '../components/MessageList';
 import MessageInput from '../components/MessageInput';
+import MobileChatHeader from '../components/MobileChatHeader';
+import MobileOptimizedMessageInput from '../components/MobileOptimizedMessageInput';
 import LudoGame from '../components/LudoGame';
 import TicTacToeGame from '../components/TicTacToeGame';
 import TriviaGame from '../components/TriviaGame';
@@ -40,8 +43,9 @@ const ChatRoomPage = () => {
   const socket = useSocket();
   const { loadUserProfiles } = useUserProfiles();
   const { getBackgroundStyle, darkMode } = useTheme() || {};
+  const { isMobile } = useResponsive();
   const callContext = useCall();
-  const { startCall, isInCall, callStatus, caller, callee, remoteUser, answerCall, endCall, toggleAudio, toggleVideo, localStream, remoteStream } = callContext;
+  const { startCall, isInCall, callStatus, caller, callee, remoteUser, answerCall, endCall, toggleAudio, toggleVideo, localStream, remoteStream, startScreenShare, stopScreenShare, isScreenSharing } = callContext;
   const callDuration = callContext.callDuration || 0;
   const [messages, setMessages] = useState([]);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
@@ -64,6 +68,7 @@ const ChatRoomPage = () => {
   const joinedRef = useRef(false);
   const [gameActionDebounce, setGameActionDebounce] = useState({});
   const [replyTo, setReplyTo] = useState(null);
+  const [mobileMessageText, setMobileMessageText] = useState('');
 
   const debounceGameAction = (actionKey, action, delay = 1000) => {
     if (gameActionDebounce[actionKey]) return;
@@ -244,13 +249,21 @@ const ChatRoomPage = () => {
     }
   };
 
-  // Smart scroll management
+  // Smart scroll management - optimized for mobile
   useEffect(() => {
     if (shouldScrollToBottom && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+      // Use requestAnimationFrame for smoother scrolling on mobile
+      requestAnimationFrame(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ 
+            behavior: isMobile ? 'auto' : 'smooth',
+            block: 'end'
+          });
+        }
+      });
       setShouldScrollToBottom(false);
     }
-  }, [messages, shouldScrollToBottom]);
+  }, [messages, shouldScrollToBottom, isMobile]);
 
   // Handle scroll events for loading older messages
   const handleScroll = (e) => {
@@ -275,6 +288,7 @@ const ChatRoomPage = () => {
     joinedRef.current = true;
 
     socket.emit('join_room', { room_id: roomId, username: user?.username });
+    socket.setCurrentRoom?.(roomId, user?.username);
 
     const onMessage = (m) => {
       if (m?.room_id !== roomId) return;
@@ -418,6 +432,7 @@ const ChatRoomPage = () => {
 
     return () => {
       socket.emit('leave_room', { room_id: roomId });
+      socket.clearCurrentRoom?.();
       socket.off('message', onMessage);
       socket.off('message_update', onMessageUpdate);
       socket.off('message_deleted', onMessageDeleted);
@@ -440,19 +455,27 @@ const ChatRoomPage = () => {
         if (!vapidPublic) return;
 
         const toUint8Array = (base64String) => {
-          const padding = '='.repeat((4 - base64String.length % 4) % 4);
-          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-          const rawData = window.atob(base64);
-          const outputArray = new Uint8Array(rawData.length);
-          for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
+          try {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+              outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+          } catch (e) {
+            console.warn('Invalid VAPID key format:', e);
+            return null;
           }
-          return outputArray;
         };
+
+        const vapidKey = toUint8Array(vapidPublic);
+        if (!vapidKey) return;
 
         const sub = await swReg.pushManager.getSubscription() || await swReg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: toUint8Array(vapidPublic),
+          applicationServerKey: vapidKey,
         });
 
         // Send subscription object to backend
@@ -499,6 +522,9 @@ const ChatRoomPage = () => {
 
     // Clear reply after sending
     if (replyTo) setReplyTo(null);
+    
+    // Clear mobile input text after sending
+    if (isMobile) setMobileMessageText('');
   };
 
   const handleTyping = (isTyping) => {
@@ -550,6 +576,34 @@ const ChatRoomPage = () => {
     if (aiTimeoutRef.current) { clearTimeout(aiTimeoutRef.current); }
     aiTimeoutRef.current = setTimeout(() => { setAiTyping(false); aiTimeoutRef.current = null; }, 30000);
     socket.emit('ai_message', { room_id: roomId, content });
+  };
+
+  const handleCreatePoll = (pollData) => {
+    if (!socket) {
+      console.error('Socket not initialized for poll creation');
+      return;
+    }
+    
+    console.log('Creating poll:', pollData);
+    
+    // Send via socket with room_id included
+    socket.emit('send_message', {
+      room_id: roomId,
+      sender: user?.username,
+      type: 'poll',
+      message_type: 'poll',
+      content: pollData.question,
+      poll_data: {
+        question: pollData.question,
+        options: pollData.options,
+        allow_multiple: pollData.allow_multiple || false,
+        anonymous: pollData.anonymous || false,
+        expires_at: pollData.expires_at || null,
+        votes: []
+      }
+    });
+    
+    setSnack({ open: true, message: 'Poll created!', severity: 'success' });
   };
 
   const handleShareLocation = (locationData) => {
@@ -753,12 +807,18 @@ const ChatRoomPage = () => {
   return (
     <MainLayout>
       <Box
+        className="chat-page"
         sx={{
           display: 'flex',
           flexDirection: 'column',
           height: '100vh',
           overflow: 'hidden',
           position: 'relative',
+          // Fix spacing issues
+          m: 0,
+          p: 0,
+          width: '100%',
+          maxWidth: '100%',
           '&::before': {
             content: '""',
             position: 'absolute',
@@ -774,28 +834,51 @@ const ChatRoomPage = () => {
           },
         }}
       >
-        <ChatHeader
-          room={room}
-          currentUser={user}
-          onCall={handleCall}
-          onVideoCall={(callType) => handleCall(callType)}
-          onViewProfile={handleViewProfile}
-          onSettings={handleSettings}
-        />
+        {/* Mobile Header */}
+        {isMobile ? (
+          <MobileChatHeader
+            room={room}
+            currentUser={user}
+            onCall={handleCall}
+            onVideoCall={(callType) => handleCall(callType)}
+            onViewProfile={handleViewProfile}
+            onSettings={handleSettings}
+          />
+        ) : (
+          <ChatHeader
+            room={room}
+            currentUser={user}
+            onCall={handleCall}
+            onVideoCall={(callType) => handleCall(callType)}
+            onViewProfile={handleViewProfile}
+            onSettings={handleSettings}
+          />
+        )}
 
+        {/* Messages Container - Optimized */}
         <Box
           ref={messagesContainerRef}
           onScroll={handleScroll}
           sx={{
             flexGrow: 1,
             overflowY: 'auto',
-            p: 3,
+            p: 0,
             display: 'flex',
             flexDirection: 'column',
             position: 'relative',
             zIndex: 1,
+            // Mobile: Add top margin to account for fixed header
+            marginTop: isMobile ? 'calc(56px + env(safe-area-inset-top))' : 0,
+            // Mobile: Fixed height calculation with proper safe area handling
+            height: isMobile 
+              ? 'calc(100vh - 56px - env(safe-area-inset-top) - 80px - env(safe-area-inset-bottom))' 
+              : 'calc(100vh - 80px - 120px)',
+            // Smooth scrolling
+            scrollBehavior: 'smooth',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
             '&::-webkit-scrollbar': {
-              width: '6px',
+              width: isMobile ? '2px' : '6px',
             },
             '&::-webkit-scrollbar-track': {
               background: 'transparent',
@@ -810,8 +893,8 @@ const ChatRoomPage = () => {
           }}
         >
           {loadingOlderMessages && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-              <CircularProgress size={20} />
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 1 }}>
+              <CircularProgress size={16} />
             </Box>
           )}
 
@@ -834,6 +917,8 @@ const ChatRoomPage = () => {
             triviaGame={triviaGame}
           />
           <div ref={messagesEndRef} />
+          
+          {/* Game Components */}
           {ludoGame && (
             <LudoGame
               gameState={ludoGame}
@@ -876,57 +961,142 @@ const ChatRoomPage = () => {
           )}
         </Box>
 
-        <Box
-          sx={{
-            position: 'relative',
-            zIndex: 2,
+        {/* Typing Indicator */}
+        {typingUsers.length > 0 && (
+          <Box sx={{ 
+            px: isMobile ? 2 : 3, 
+            py: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
             background: darkMode 
-              ? 'rgba(30, 41, 59, 0.9)'
-              : 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(20px)',
+              ? 'rgba(30, 41, 59, 0.95)'
+              : 'rgba(255, 255, 255, 0.95)',
             borderTop: `1px solid ${darkMode ? 'rgba(148, 163, 184, 0.1)' : 'rgba(148, 163, 184, 0.2)'}`,
-            transition: 'all 0.3s ease',
-          }}
-        >
-          {typingUsers.length > 0 && (
+          }}>
             <Box sx={{ 
-              px: 3, 
-              py: 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
+              display: 'flex', 
+              gap: 0.5,
+              alignItems: 'center'
             }}>
-              <Box sx={{ 
-                display: 'flex', 
-                gap: 0.5,
-                alignItems: 'center'
-              }}>
-                {[0, 1, 2].map((i) => (
-                  <Box
-                    key={i}
-                    sx={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      backgroundColor: 'primary.main',
-                      animation: 'typing 1.4s infinite ease-in-out',
-                      animationDelay: `${i * 0.2}s`,
-                      '@keyframes typing': {
-                        '0%, 60%, 100%': { transform: 'translateY(0)', opacity: 0.4 },
-                        '30%': { transform: 'translateY(-8px)', opacity: 1 },
-                      },
-                    }}
-                  />
-                ))}
-              </Box>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                {typingUsers.map(u => u.username).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
-              </Typography>
+              {[0, 1, 2].map((i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    width: isMobile ? 4 : 6,
+                    height: isMobile ? 4 : 6,
+                    borderRadius: '50%',
+                    backgroundColor: 'primary.main',
+                    animation: 'typing 1.4s infinite ease-in-out',
+                    animationDelay: `${i * 0.2}s`,
+                    '@keyframes typing': {
+                      '0%, 60%, 100%': { transform: 'translateY(0)', opacity: 0.4 },
+                      '30%': { transform: 'translateY(-8px)', opacity: 1 },
+                    },
+                  }}
+                />
+              ))}
             </Box>
-          )}
-          <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack({ open: false, message: '', severity: 'info' })}>
-            <Alert severity={snack.severity} onClose={() => setSnack({ open: false, message: '', severity: 'info' })}>{snack.message}</Alert>
-          </Snackbar>
+            <Typography variant={isMobile ? 'caption' : 'body2'} sx={{ color: 'text.secondary', fontWeight: 500 }}>
+              {typingUsers.map(u => u.username).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
+            </Typography>
+          </Box>
+        )}
+
+        {/* Message Input - Always show on mobile screens */}
+        <Box sx={{ 
+          display: { xs: 'block !important', md: 'none' },
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          visibility: 'visible !important',
+          opacity: '1 !important',
+          pointerEvents: 'auto',
+          minHeight: '80px',
+          backgroundColor: darkMode ? 'rgba(30, 41, 59, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.1)',
+        }}
+        data-testid="mobile-message-input-container"
+        >
+          <MobileOptimizedMessageInput
+            onSend={handleSend}
+            text={mobileMessageText}
+            setText={setMobileMessageText}
+            onTyping={handleTyping}
+            replyTo={replyTo}
+            onCancelReply={() => setReplyTo(null)}
+            onDiceRoll={handleDiceRoll}
+            onCoinFlip={handleCoinFlip}
+            onAIRequest={handleAIRequest}
+            onShareLocation={handleShareLocation}
+            onScheduleMessage={handleScheduleMessage}
+            onCreatePoll={handleCreatePoll}
+            socket={socket}
+            user={user}
+            room={{ id: roomId }}
+          />
+          
+          {/* Fallback simple input for debugging */}
+          <Box sx={{ 
+            p: 2, 
+            backgroundColor: 'background.paper',
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            display: 'none' // Disable fallback, fix main component instead
+          }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={mobileMessageText}
+                onChange={(e) => setMobileMessageText(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSend(mobileMessageText);
+                  }
+                }}
+                placeholder="Type a message..."
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '8px',
+                  fontSize: '16px'
+                }}
+              />
+              <button
+                onClick={() => handleSend(mobileMessageText)}
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: '#1976d2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Send
+              </button>
+            </Box>
+          </Box>
+        </Box>
+        
+        {/* Desktop Input */}
+        <Box sx={{ 
+          display: { xs: 'none', md: 'block' },
+          position: 'relative',
+          zIndex: 2,
+          background: darkMode 
+            ? 'rgba(30, 41, 59, 0.95)'
+            : 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(20px)',
+          borderTop: `1px solid ${darkMode ? 'rgba(148, 163, 184, 0.1)' : 'rgba(148, 163, 184, 0.2)'}`,
+          transition: 'all 0.3s ease',
+        }}>
           <MessageInput
             onSend={handleSend}
             onTyping={handleTyping}
@@ -947,6 +1117,15 @@ const ChatRoomPage = () => {
           />
         </Box>
       </Box>
+
+
+
+
+
+      {/* Snackbar for notifications */}
+      <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack({ open: false, message: '', severity: 'info' })}>
+        <Alert severity={snack.severity} onClose={() => setSnack({ open: false, message: '', severity: 'info' })}>{snack.message}</Alert>
+      </Snackbar>
 
       {/* Settings Modal */}
       <Dialog open={showSettings} onClose={handleCloseSettings} maxWidth="sm" fullWidth>
@@ -1031,6 +1210,9 @@ const ChatRoomPage = () => {
         remoteStream={remoteStream}
         onToggleAudio={toggleAudio}
         onToggleVideo={toggleVideo}
+        onStartScreenShare={startScreenShare}
+        onStopScreenShare={stopScreenShare}
+        isScreenSharing={isScreenSharing}
         callDuration={callDuration}
       />
     </MainLayout>

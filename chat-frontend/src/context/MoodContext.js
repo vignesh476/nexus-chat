@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 
 const MoodContext = createContext();
 
@@ -24,23 +24,29 @@ export const MoodProvider = ({ children }) => {
     return 'neutral';
   };
 
-  const updateMood = (message) => {
+  const updateMood = useCallback((message) => {
     const mood = analyzeMood(message);
-    setMoodHistory(prev => [...prev.slice(-10), mood]);
-    
-    const recentMoods = moodHistory.slice(-5);
-    const moodCounts = recentMoods.reduce((acc, m) => {
-      acc[m] = (acc[m] || 0) + 1;
-      return acc;
-    }, {});
-    
-    if (Object.keys(moodCounts).length > 0) {
-      const dominantMood = Object.keys(moodCounts).reduce((a, b) => 
-        moodCounts[a] > moodCounts[b] ? a : b
-      );
-      setCurrentMood(dominantMood);
-    }
-  };
+    setMoodHistory(prev => {
+      const newHistory = [...prev.slice(-10), mood];
+      
+      const recentMoods = newHistory.slice(-5);
+      const moodCounts = recentMoods.reduce((acc, m) => {
+        acc[m] = (acc[m] || 0) + 1;
+        return acc;
+      }, {});
+      
+      if (Object.keys(moodCounts).length > 0) {
+        const dominantMood = Object.keys(moodCounts).reduce((a, b) => 
+          moodCounts[a] > moodCounts[b] ? a : b
+        );
+        if (dominantMood !== currentMood) {
+          setCurrentMood(dominantMood);
+        }
+      }
+      
+      return newHistory;
+    });
+  }, [currentMood]);
 
   const getMoodTheme = () => {
     const themes = {

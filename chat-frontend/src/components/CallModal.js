@@ -1,15 +1,40 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Avatar, Box, IconButton, Fade, Grid } from '@mui/material';
-import { Mic, MicOff, CallEnd, Call, Videocam, VideocamOff, ScreenShare, StopScreenShare } from '@mui/icons-material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Avatar, Box, IconButton, Fade, Grid, useMediaQuery, useTheme, Snackbar, Alert } from '@mui/material';
+import { Mic, MicOff, CallEnd, Call, Videocam, VideocamOff, ScreenShare, StopScreenShare, Fullscreen, FullscreenExit } from '@mui/icons-material';
 import { useUserProfiles } from '../context/UserProfileContext';
 
-const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, localStream, remoteStream, onToggleAudio, onToggleVideo, callDuration }) => {
+const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, localStream, remoteStream, onToggleAudio, onToggleVideo, onStartScreenShare, onStopScreenShare, isScreenSharing: isScreenSharingProp, callDuration }) => {
   const localVideoRef = useRef();
   const remoteVideoRef = useRef();
   const remoteAudioRef = useRef();
   const { getUserProfile } = useUserProfiles();
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [screenStream, setScreenStream] = useState(null);
+  const [error, setError] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const handleFullscreen = () => {
+    if (!isFullscreen) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+    setIsFullscreen(!isFullscreen);
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   const callerProfile = remoteUser ? getUserProfile(remoteUser) : null;
   const displayName = callerProfile ? callerProfile.display_name || remoteUser : remoteUser || 'Unknown';
@@ -24,10 +49,10 @@ const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, 
   }, [callStatus, remoteUser, displayName]);
 
   useEffect(() => {
-    if (localVideoRef.current && (screenStream || localStream)) {
-      localVideoRef.current.srcObject = screenStream || localStream;
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
     }
-  }, [localStream, screenStream]);
+  }, [localStream]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
@@ -39,31 +64,17 @@ const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, 
   }, [remoteStream]);
 
   const handleScreenShare = async () => {
-    try {
-      if (isScreenSharing) {
-        // Stop screen sharing
-        if (screenStream) {
-          screenStream.getTracks().forEach(track => track.stop());
-          setScreenStream(null);
-        }
-        setIsScreenSharing(false);
-      } else {
-        // Start screen sharing
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true
-        });
-        setScreenStream(stream);
-        setIsScreenSharing(true);
-        
-        // Handle when user stops sharing via browser UI
-        stream.getVideoTracks()[0].onended = () => {
-          setIsScreenSharing(false);
-          setScreenStream(null);
-        };
+    if (isScreenSharingProp) {
+      if (onStopScreenShare) {
+        await onStopScreenShare();
       }
-    } catch (error) {
-      console.error('Screen sharing error:', error);
+    } else {
+      if (onStartScreenShare) {
+        const result = await onStartScreenShare();
+        if (!result.success) {
+          setError(result.error || 'Screen share failed');
+        }
+      }
     }
   };
 
@@ -80,12 +91,21 @@ const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, 
     <Dialog
       open={open}
       onClose={onEndCall}
-      maxWidth="md"
+      maxWidth={false}
       fullWidth
+      fullScreen={isMobile}
       TransitionComponent={Fade}
       TransitionProps={{ timeout: 500 }}
       disableEnforceFocus
-      sx={{ '& .MuiDialog-paper': { height: '80vh' } }}
+      sx={{ 
+        '& .MuiDialog-paper': { 
+          height: isMobile ? '100vh' : '80vh',
+          width: isMobile ? '100vw' : 'auto',
+          maxWidth: isMobile ? '100vw' : '90vw',
+          margin: isMobile ? 0 : 'auto',
+          borderRadius: isMobile ? 0 : 2,
+        } 
+      }}
     >
       <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
         {callStatus === 'ringing' ? `Incoming Call from ${remoteUser || 'Unknown'}` : callStatus === 'calling' ? `Calling ${remoteUser || 'Unknown'}` : callStatus === 'connecting' ? `Connecting to ${remoteUser || 'Unknown'}` : callStatus === 'connected' ? `Call Connected with ${remoteUser || 'Unknown'}` : 'Call'}
@@ -177,7 +197,13 @@ const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, 
           </Box>
         )}
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+      <DialogActions sx={{ 
+        justifyContent: 'center', 
+        pb: isMobile ? 2 : 3,
+        px: isMobile ? 2 : 3,
+        gap: isMobile ? 1 : 2,
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
+      }}>
         {callStatus === 'connected' && (
           <>
             <IconButton
@@ -208,16 +234,22 @@ const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, 
             </IconButton>
             <IconButton
               onClick={handleScreenShare}
+              disabled={isMobile}
               sx={{
-                bgcolor: isScreenSharing ? 'primary.main' : 'grey.300',
-                color: isScreenSharing ? 'white' : 'black',
+                bgcolor: isScreenSharingProp ? 'primary.main' : 'grey.300',
+                color: isScreenSharingProp ? 'white' : 'black',
                 mr: 2,
                 '&:hover': {
-                  bgcolor: isScreenSharing ? 'primary.dark' : 'grey.400',
+                  bgcolor: isScreenSharingProp ? 'primary.dark' : 'grey.400',
+                },
+                '&:disabled': {
+                  bgcolor: 'grey.200',
+                  color: 'grey.400',
                 },
               }}
+              title={isMobile ? 'Screen share not supported on mobile' : ''}
             >
-              {isScreenSharing ? <StopScreenShare /> : <ScreenShare />}
+              {isScreenSharingProp ? <StopScreenShare /> : <ScreenShare />}
             </IconButton>
           </>
         )}
@@ -245,6 +277,12 @@ const CallModal = ({ open, callStatus, caller: remoteUser, onAnswer, onEndCall, 
           {callStatus === 'ringing' ? 'Decline' : 'End Call'}
         </Button>
       </DialogActions>
+      <audio ref={remoteAudioRef} autoPlay />
+      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError(null)}>
+        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
     </Dialog>
   );
 };

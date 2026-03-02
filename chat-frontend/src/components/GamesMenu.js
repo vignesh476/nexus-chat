@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   IconButton,
   Popover,
@@ -38,77 +38,85 @@ const GamesMenu = ({
     action();
   };
 
+  // Event handlers to prevent arrow functions in JSX
+  const handleRPSStart = useCallback(() => onRPSStart(), [onRPSStart]);
+  const handleDiceRoll = useCallback(() => onDiceRoll(), [onDiceRoll]);
+  const handleCoinFlip = useCallback(() => onCoinFlip(), [onCoinFlip]);
+  const handleTriviaStart = useCallback(() => {
+    if (socket) {
+      socket.emit('send_message', {
+        room_id: room.id,
+        sender: user.username,
+        type: 'trivia_start',
+        content: 'Starting Trivia Quiz',
+        game_type: 'trivia'
+      });
+    }
+  }, [socket, room, user]);
+  const handleTicTacToeStart = useCallback(() => {
+    if (socket) {
+      socket.emit('send_message', {
+        room_id: room.id,
+        sender: user.username,
+        type: 'tic_tac_toe_start',
+        content: 'Starting Tic-Tac-Toe game',
+        game_type: 'tic_tac_toe'
+      });
+    }
+  }, [socket, room, user]);
+  const handleLudoStart = useCallback(() => {
+    if (socket) {
+      socket.emit('send_message', {
+        room_id: room.id,
+        sender: user.username,
+        type: 'ludo_start',
+        content: 'Starting Ludo game',
+        game_type: 'ludo'
+      });
+    }
+  }, [socket, room, user]);
+
   const games = [
     {
       id: 'rps',
       title: 'Rock Paper Scissors',
       icon: '✊✋✌',
-      action: () => onRPSStart(),
+      action: handleRPSStart,
       color: '#4CAF50',
     },
     {
       id: 'dice',
       title: 'Roll Dice',
       icon: '🎲',
-      action: () => onDiceRoll(),
+      action: handleDiceRoll,
       color: '#FF9800',
     },
     {
       id: 'coin',
       title: 'Flip Coin',
       icon: '🪙',
-      action: () => onCoinFlip(),
+      action: handleCoinFlip,
       color: '#9C27B0',
     },
     {
       id: 'trivia',
       title: 'Trivia Quiz',
       icon: '🧠',
-      action: () => {
-        if (socket) {
-          socket.emit('send_message', {
-            room_id: room.id,
-            sender: user.username,
-            type: 'trivia_start',
-            content: 'Starting Trivia Quiz',
-            game_type: 'trivia'
-          });
-        }
-      },
+      action: handleTriviaStart,
       color: '#2196F3',
     },
     {
       id: 'tictactoe',
       title: 'Tic-Tac-Toe',
       icon: '⭕',
-      action: () => {
-        if (socket) {
-          socket.emit('send_message', {
-            room_id: room.id,
-            sender: user.username,
-            type: 'tic_tac_toe_start',
-            content: 'Starting Tic-Tac-Toe game',
-            game_type: 'tic_tac_toe'
-          });
-        }
-      },
+      action: handleTicTacToeStart,
       color: '#FF5722',
     },
     {
       id: 'ludo',
       title: 'Ludo',
       icon: '🏁',
-      action: () => {
-        if (socket) {
-          socket.emit('send_message', {
-            room_id: room.id,
-            sender: user.username,
-            type: 'ludo_start',
-            content: 'Starting Ludo game',
-            game_type: 'ludo'
-          });
-        }
-      },
+      action: handleLudoStart,
       color: '#607D8B',
     },
   ];

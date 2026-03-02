@@ -1,0 +1,194 @@
+/* Chat Layout Optimizations */
+
+/* Fix for MuiBox-root css-ekgeft spacing issues */
+.MuiBox-root.css-ekgeft {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Mobile viewport optimizations */
+@media (max-width: 768px) {
+  /* Prevent zoom on input focus for iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  .MuiInputBase-input {
+    font-size: 16px !important;
+    transform: translateZ(0);
+    -webkit-appearance: none;
+  }
+
+  /* Fix mobile scroll issues */
+  .chat-messages-container {
+    height: calc(100vh - 64px - 80px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    scroll-behavior: smooth !important;
+  }
+
+  /* Ensure proper safe area handling */
+  .mobile-input-container {
+    padding-bottom: env(safe-area-inset-bottom) !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1000 !important;
+  }
+
+  /* Fix typing box positioning */
+  .mobile-typing-box {
+    margin-bottom: 8px !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+
+  /* Optimize scroll indicators */
+  .scroll-indicator {
+    position: fixed !important;
+    z-index: 1001 !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+  }
+}
+
+/* Desktop optimizations */
+@media (min-width: 769px) {
+  /* Remove wasted space in desktop view */
+  .desktop-chat-container {
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Optimize message container height */
+  .desktop-messages-container {
+    height: calc(100vh - 80px - 120px) !important;
+    padding-bottom: 20px !important;
+  }
+
+  /* Better scrollbar styling */
+  .desktop-messages-container::-webkit-scrollbar {
+    width: 6px !important;
+  }
+
+  .desktop-messages-container::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  .desktop-messages-container::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4) !important;
+    border-radius: 3px !important;
+  }
+
+  .desktop-messages-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.6) !important;
+  }
+}
+
+/* Animation optimizations */
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes typingDots {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+/* Feature drawer optimizations */
+.feature-drawer {
+  border-radius: 20px 20px 0 0 !important;
+  max-height: 75vh !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+/* Smooth transitions */
+.smooth-transition {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Fix for touch targets on mobile */
+@media (max-width: 768px) {
+  .touch-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  /* Prevent text selection on buttons */
+  .no-select {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+}
+
+/* Performance optimizations */
+.gpu-accelerated {
+  transform: translateZ(0) !important;
+  -webkit-transform: translateZ(0) !important;
+  will-change: transform !important;
+}
+
+/* Fix for backdrop blur support */
+@supports (backdrop-filter: blur(20px)) {
+  .backdrop-blur {
+    backdrop-filter: blur(20px) !important;
+  }
+}
+
+@supports (-webkit-backdrop-filter: blur(20px)) {
+  .backdrop-blur {
+    -webkit-backdrop-filter: blur(20px) !important;
+  }
+}
+
+/* Dark mode specific fixes */
+.dark-mode .chat-container {
+  background: linear-gradient(135deg, rgba(18, 18, 18, 0.95) 0%, rgba(30, 30, 30, 0.95) 100%) !important;
+}
+
+.light-mode .chat-container {
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.95) 100%) !important;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .chat-input {
+    border: 2px solid currentColor !important;
+  }
+  
+  .feature-button {
+    border: 1px solid currentColor !important;
+  }
+}

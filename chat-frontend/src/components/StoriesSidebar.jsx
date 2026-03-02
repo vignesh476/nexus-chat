@@ -19,7 +19,6 @@ export default function StoriesSidebar({ compact = true, socket }) {
         const arr = Array.isArray(res) ? res.filter(Boolean) : [];
         if (mounted) setStories(arr);
       } catch (e) {
-        console.warn('Failed to load stories', e);
         if (mounted) setStories([]);
       }
     };
@@ -31,16 +30,12 @@ export default function StoriesSidebar({ compact = true, socket }) {
       if (payload.event === 'story_created') {
         if (payload.story && payload.story._id) {
           setStories(prev => [payload.story, ...prev.filter(s => s && s._id !== payload.story._id)]);
-        } else {
-          console.warn('Received malformed story_created payload', payload);
         }
       } else if (payload.event === 'story_deleted') {
         setStories(prev => prev.filter(s => s && s._id !== payload.story_id));
       } else if (payload.event === 'story_interaction') {
         if (payload.story && payload.story._id) {
           setStories(prev => prev.map(s => s && s._id === payload.story._id ? payload.story : s));
-        } else {
-          console.warn('Received malformed story_interaction payload', payload);
         }
       }
     };

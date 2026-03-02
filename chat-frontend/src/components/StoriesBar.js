@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Avatar, IconButton, Dialog, Tooltip, Badge, Typography, Chip } from '@mui/material';
+import { Box, Avatar, IconButton, Tooltip, Badge, Typography, Chip } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { getStories } from '../api/stories';
 import StoryViewer from './StoryViewer';
 import StoryComposer from './StoryComposer';
 import { styled, keyframes } from '@mui/material/styles';
+import useResponsive from '../hooks/useResponsive';
 
 const pulseAnimation = keyframes`
   0% { transform: scale(1); }
@@ -25,6 +26,7 @@ export default function StoriesBar({ socket }) {
   const [startIndex, setStartIndex] = useState(0);
   const [openComposer, setOpenComposer] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { isMobile } = useResponsive();
 
   useEffect(() => {
     let mounted = true;
@@ -37,7 +39,6 @@ export default function StoriesBar({ socket }) {
           setLoading(false);
         }
       } catch (e) {
-        console.warn('Failed to load stories', e);
         if (mounted) setLoading(false);
       }
     };
@@ -81,8 +82,8 @@ export default function StoriesBar({ socket }) {
   const friendsStories = userStories.filter(u => !u.isOwn);
 
   const StyledAvatar = styled(Avatar)(({ theme, hasStory, isOwn, isNew }) => ({
-    width: 64,
-    height: 64,
+    width: isMobile ? 56 : 64,
+    height: isMobile ? 56 : 64,
     cursor: 'pointer',
     border: hasStory 
       ? `3px solid ${isOwn ? '#e91e63' : '#1976d2'}` 
@@ -109,8 +110,8 @@ export default function StoriesBar({ socket }) {
   }));
 
   const AddStoryButton = styled(Box)(({ theme }) => ({
-    width: 64,
-    height: 64,
+    width: isMobile ? 56 : 64,
+    height: isMobile ? 56 : 64,
     borderRadius: '50%',
     border: '3px dashed #ccc',
     display: 'flex',
@@ -135,22 +136,25 @@ export default function StoriesBar({ socket }) {
     return (
       <Box sx={{
         display: 'flex',
-        gap: 2,
-        p: 2,
+        gap: isMobile ? 1.5 : 2,
+        p: isMobile ? 1.5 : 2,
         backgroundColor: 'background.paper',
         borderBottom: '1px solid #e0e0e0',
-        alignItems: 'center'
+        alignItems: 'center',
+        overflowX: 'auto',
+        '&::-webkit-scrollbar': { display: 'none' },
+        scrollbarWidth: 'none'
       }}>
-        {[...Array(5)].map((_, i) => (
-          <Box key={i} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 80 }}>
+        {[...Array(isMobile ? 3 : 5)].map((_, i) => (
+          <Box key={i} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: isMobile ? 70 : 80 }}>
             <Box sx={{
-              width: 64,
-              height: 64,
+              width: isMobile ? 56 : 64,
+              height: isMobile ? 56 : 64,
               borderRadius: '50%',
               backgroundColor: '#f0f0f0',
               animation: `${pulseAnimation} 1.5s ease-in-out infinite`
             }} />
-            <Box sx={{ width: 60, height: 12, backgroundColor: '#f0f0f0', borderRadius: 1, mt: 1 }} />
+            <Box sx={{ width: isMobile ? 50 : 60, height: 12, backgroundColor: '#f0f0f0', borderRadius: 1, mt: 1 }} />
           </Box>
         ))}
       </Box>
@@ -160,8 +164,8 @@ export default function StoriesBar({ socket }) {
   return (
     <Box sx={{
       display: 'flex',
-      gap: 2,
-      p: 2,
+      gap: isMobile ? 1.5 : 2,
+      p: isMobile ? 1.5 : 2,
       overflowX: 'auto',
       backgroundColor: 'background.paper',
       alignItems: 'center',
@@ -170,7 +174,7 @@ export default function StoriesBar({ socket }) {
       scrollbarWidth: 'none'
     }}>
       {/* Your Story */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 80 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: isMobile ? 70 : 80 }}>
         <Tooltip title={ownStory ? "View Your Story" : "Create Your Story"} arrow>
           <Box sx={{ position: 'relative' }}>
             {ownStory ? (
@@ -188,7 +192,7 @@ export default function StoriesBar({ socket }) {
               </StyledAvatar>
             ) : (
               <AddStoryButton onClick={() => setOpenComposer(true)}>
-                <AddCircleOutlineIcon sx={{ fontSize: 32, color: '#666' }} />
+                <AddCircleOutlineIcon sx={{ fontSize: isMobile ? 28 : 32, color: '#666' }} />
               </AddStoryButton>
             )}
             {ownStory && ownStory.stories.length > 1 && (
@@ -202,8 +206,8 @@ export default function StoriesBar({ socket }) {
                   backgroundColor: '#e91e63',
                   color: 'white',
                   fontSize: '0.7rem',
-                  height: 20,
-                  minWidth: 20
+                  height: 18,
+                  minWidth: 18
                 }}
               />
             )}
@@ -211,20 +215,23 @@ export default function StoriesBar({ socket }) {
         </Tooltip>
         <Typography variant="caption" sx={{ 
           mt: 0.5, 
-          fontSize: '0.7rem', 
+          fontSize: isMobile ? '0.65rem' : '0.7rem', 
           textAlign: 'center',
           fontWeight: ownStory ? 'bold' : 'normal',
-          color: ownStory ? '#e91e63' : 'text.secondary'
+          color: ownStory ? '#e91e63' : 'text.secondary',
+          maxWidth: isMobile ? 60 : 70,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
         }}>
           {ownStory ? 'Your Story' : 'Add Story'}
         </Typography>
       </Box>
 
       {/* Friends Stories */}
-      {friendsStories.map((user) => {
+      {friendsStories.slice(0, isMobile ? 6 : 10).map((user) => {
         const hasNewStories = user.stories.some(isStoryNew);
         return (
-          <Box key={user.username} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 80 }}>
+          <Box key={user.username} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: isMobile ? 70 : 80 }}>
             <Tooltip title={`${user.username} - ${user.stories.length} ${user.stories.length === 1 ? 'story' : 'stories'}${hasNewStories ? ' (New!)' : ''}`} arrow>
               <Box sx={{ position: 'relative' }}>
                 <StyledAvatar
@@ -251,8 +258,8 @@ export default function StoriesBar({ socket }) {
                       backgroundColor: '#1976d2',
                       color: 'white',
                       fontSize: '0.7rem',
-                      height: 20,
-                      minWidth: 20
+                      height: 18,
+                      minWidth: 18
                     }}
                   />
                 )}
@@ -261,8 +268,8 @@ export default function StoriesBar({ socket }) {
                     position: 'absolute',
                     top: -3,
                     left: -3,
-                    width: 12,
-                    height: 12,
+                    width: 10,
+                    height: 10,
                     borderRadius: '50%',
                     backgroundColor: '#4caf50',
                     border: '2px solid white'
@@ -272,9 +279,9 @@ export default function StoriesBar({ socket }) {
             </Tooltip>
             <Typography variant="caption" sx={{ 
               mt: 0.5, 
-              fontSize: '0.7rem', 
+              fontSize: isMobile ? '0.65rem' : '0.7rem', 
               textAlign: 'center', 
-              maxWidth: 70, 
+              maxWidth: isMobile ? 60 : 70, 
               overflow: 'hidden', 
               textOverflow: 'ellipsis',
               fontWeight: hasNewStories ? 'bold' : 'normal',

@@ -1,0 +1,346 @@
+/* Production Mobile Optimizations */
+
+/* Performance optimizations */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+input, textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Force message visibility - temporary fix */
+@media (max-width: 768px) {
+  .chat-page .MuiBox-root[style*="background"] {
+    background: transparent !important;
+  }
+  
+  .chat-page .MuiTypography-root {
+    color: inherit !important;
+    opacity: 1 !important;
+  }
+  
+  .chat-page .MuiListItem-root {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* Hide problematic elements only on chat pages */
+@media (max-width: 768px) {
+  /* Only hide these on chat pages */
+  .chat-page .MuiToolbar-root.MuiToolbar-gutters.MuiToolbar-regular.css-15sp0bb-MuiToolbar-root,
+  .chat-page .MuiBox-root.css-19midj6 {
+    display: none !important;
+  }
+  
+  /* Ensure message container is properly sized */
+  .chat-page .message-container {
+    height: calc(100vh - 56px - 100px) !important;
+    overflow-y: auto !important;
+    padding-bottom: 0 !important;
+  }
+  
+  /* Force mobile message input to be visible */
+  .chat-page [data-testid="mobile-message-input"],
+  .chat-page .MuiPaper-root[style*="border-radius: 20px 20px 0px 0px"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 1002 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+  
+  /* Remove extra spacing from message containers */
+  .MuiList-root {
+    padding: 0 !important;
+  }
+  
+  .MuiListItem-root {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+  
+  /* Optimize scrolling performance */
+  .message-list {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    will-change: scroll-position;
+  }
+  
+  /* Reduce animations for better performance */
+  .message-bubble {
+    will-change: transform;
+  }
+  
+  /* Optimize touch targets */
+  button, .MuiIconButton-root, .MuiFab-root {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Optimized message bubbles for mobile */
+@media (max-width: 768px) {
+  /* Message bubbles - compact and efficient */
+  .message-bubble {
+    min-height: 36px;
+    padding: 8px 12px;
+    margin: 2px 0;
+    border-radius: 18px;
+    max-width: 70%;
+    min-width: 80px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+    font-size: 0.875rem;
+  }
+
+  /* Current user messages - modern blue */
+  .message-bubble.current-user {
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+    color: white;
+    margin-left: auto;
+    margin-right: 8px;
+    box-shadow: 0 1px 8px rgba(33, 150, 243, 0.2);
+  }
+
+  /* Other user messages - clean gray */
+  .message-bubble.other-user {
+    background: #f5f5f5;
+    color: #000;
+    margin-left: 8px;
+    margin-right: auto;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Dark mode adjustments */
+  @media (prefers-color-scheme: dark) {
+    .message-bubble.current-user {
+      background: #1976d2;
+      color: white;
+    }
+
+    .message-bubble.other-user {
+      background: #424242;
+      color: white;
+    }
+  }
+
+  /* Message text */
+  .message-text {
+    font-size: 14px;
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  /* Message actions */
+  .message-actions {
+    min-height: 32px;
+    padding: 4px;
+  }
+
+  .message-actions button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px;
+  }
+
+  /* Reactions */
+  .message-reactions {
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .message-reactions .MuiChip-root {
+    height: 24px;
+    font-size: 12px;
+  }
+
+  /* Timestamps - better positioning and readability */
+  .message-timestamp {
+    font-size: 11px;
+    margin-top: 6px;
+    opacity: 0.7;
+    font-weight: 400;
+    text-align: right; /* Align timestamps to message side */
+  }
+
+  .message-timestamp.other-user {
+    text-align: left;
+  }
+
+  /* Game messages - mobile optimized */
+  .game-message {
+    padding: 12px;
+    border-radius: 16px;
+    margin: 6px 0;
+  }
+
+  .game-message button {
+    min-height: 44px;
+    font-size: 0.9rem;
+    padding: 8px 16px;
+    margin: 2px 0;
+  }
+
+  /* Game buttons in vertical layout */
+  .game-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .game-buttons button {
+    width: 100%;
+  }
+
+  /* Media messages */
+  .media-message img,
+  .media-message video {
+    max-width: 100%;
+    height: auto;
+    border-radius: 12px;
+  }
+
+  /* Reply preview */
+  .reply-preview {
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    border-left-width: 3px;
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    padding: 8px 12px;
+  }
+
+  .typing-dots {
+    width: 4px;
+    height: 4px;
+  }
+
+  /* Scroll optimization */
+  .message-list {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Reduce animations on mobile for better performance */
+  .message-bubble:hover {
+    transform: none !important;
+  }
+
+  /* Better spacing for message clusters */
+  .message-cluster {
+    margin-bottom: 12px;
+  }
+
+  /* Compact sender names */
+  .message-sender {
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  /* Optimize emoji picker for mobile */
+  .emoji-popover {
+    max-width: 280px;
+  }
+
+  .emoji-popover button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* Extra small screens - ultra compact */
+@media (max-width: 480px) {
+  .message-bubble {
+    max-width: 75%;
+    min-width: 60px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border-radius: 16px;
+  }
+
+  .message-actions button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px;
+  }
+
+  .game-message {
+    padding: 8px;
+    margin: 4px 0;
+  }
+
+  .game-message button {
+    min-height: 40px;
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+
+  /* Ultra compact timestamps */
+  .message-timestamp {
+    font-size: 9px;
+  }
+
+  /* Reduce all spacing */
+  .MuiListItem-root {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+}
+
+/* Dark mode adjustments for mobile */
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+  .message-bubble {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .message-timestamp {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .message-sender {
+    color: rgba(255, 255, 255, 0.8);
+  }
+}
+
+/* Accessibility improvements for mobile */
+@media (max-width: 768px) {
+  /* Ensure sufficient contrast */
+  .message-text {
+    color: inherit;
+  }
+
+  /* Focus indicators */
+  .message-actions button:focus {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  /* Reduce motion for users who prefer it */
+  @media (prefers-reduced-motion: reduce) {
+    .message-bubble,
+    .typing-dots,
+    .game-message {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}

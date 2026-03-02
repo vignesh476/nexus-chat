@@ -70,8 +70,32 @@ export default function StoryViewer({ open, onClose, stories = [], startIndex = 
   if (!stories || stories.length === 0) {
     return (
       <Dialog fullScreen open={open} onClose={onClose}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', bgcolor: 'black' }}>
-          <Typography variant="h4" sx={{ color: 'white' }}>No stories available</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', bgcolor: 'black', position: 'relative' }}>
+          <IconButton 
+            sx={{ 
+              position: 'absolute', 
+              left: 16, 
+              top: 16, 
+              backgroundColor: 'rgba(0,0,0,0.5)', 
+              color: 'white',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.7)' }
+            }} 
+            onClick={onClose}
+          >
+            <CloseIcon />
+          </IconButton>
+          <Typography variant="h5" sx={{ color: 'white', mb: 2 }}>No stories available</Typography>
+          <Button 
+            variant="contained" 
+            onClick={onClose}
+            sx={{ 
+              mt: 2,
+              bgcolor: 'rgba(255,255,255,0.2)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }
+            }}
+          >
+            Go Back
+          </Button>
         </Box>
       </Dialog>
     );

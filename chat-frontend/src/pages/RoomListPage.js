@@ -20,7 +20,6 @@ import {
   DialogActions,
   Button,
   TextField,
-  Box,
   Snackbar,
   Alert,
   Fab,
@@ -29,7 +28,7 @@ import {
   Avatar,
   ListItemAvatar,
 } from '@mui/material';
-import { Delete, PersonAdd, VolumeOff, VolumeUp, GroupAdd, Settings } from '@mui/icons-material';
+import { Delete, PersonAdd, VolumeOff, VolumeUp, GroupAdd } from '@mui/icons-material';
 
 const RoomListPage = () => {
   const { user } = useAuth();
@@ -129,17 +128,15 @@ const RoomListPage = () => {
     if (!groupName.trim() || selectedMembers.length === 0) return;
 
     try {
-      const res = await roomsAPI.createRoom({
+      await roomsAPI.createRoom({
         name: groupName,
         members: [...selectedMembers, user.username],
         admins: [user.username],
         is_group: true
       });
       setSnackbar({ open: true, message: 'Group created successfully', severity: 'success' });
-      // Refresh rooms
       const roomsRes = await roomsAPI.listRooms();
       setRooms(roomsRes.data);
-      // Reset form
       setGroupName('');
       setSelectedMembers([]);
       setCreateGroupDialog({ open: false });

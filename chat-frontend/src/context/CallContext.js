@@ -15,30 +15,56 @@ export const useCall = () => {
 export const CallProvider = ({ children }) => {
   const { user } = useAuth();
   const socket = useSocket();
-  const [callState, setCallState] = useState({
-    isInCall: false,
-    callStatus: null, // 'calling', 'ringing', 'connecting', 'connected'
-    caller: null,
-    callee: null,
-    roomId: null,
-    localStream: null,
-    remoteStream: null,
-    callStartTime: null,
-    callDuration: 0,
+  const [callState, setCallState] = useState(() => {
+    const saved = localStorage.getItem('callState');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.isInCall && Date.now() - parsed.callStartTime < 300000) {
+          return { ...parsed, localStream: null, remoteStream: null };
+        }
+      } catch (e) {}
+    }
+    return {
+      isInCall: false,
+      callStatus: null,
+      caller: null,
+      callee: null,
+      roomId: null,
+      callId: null,
+      localStream: null,
+      remoteStream: null,
+      callStartTime: null,
+      callDuration: 0,
+    };
   });
 
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
+  const screenStreamRef = useRef(null); // Track screen share stream
+  const screenSenderRef = useRef(null); // Track screen share sender
   const callTimeoutRef = useRef(null);
   const ringingTimeoutRef = useRef(null);
   const disconnectTimeoutRef = useRef(null);
   const incomingOfferHasVideoRef = useRef(false);
+  const pendingIceCandidatesRef = useRef([]);
+  const callIdRef = useRef(null); // Track call_id separately for ICE candidates
 
   const configuration = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+      {
+        urls: process.env.REACT_APP_TURN_SERVER_URL || 'turn:openrelay.metered.ca:80',
+        username: process.env.REACT_APP_TURN_USERNAME || 'openrelayproject',
+        credential: process.env.REACT_APP_TURN_CREDENTIAL || 'openrelayproject'
+      }
     ],
+    iceTransportPolicy: 'all',
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
+    iceCandidatePoolSize: 10
   };
 
   // Ensure endCall is defined before any callbacks reference it to avoid TDZ
@@ -94,7 +120,14 @@ export const CallProvider = ({ children }) => {
       localStreamRef.current = null;
     }
 
-    setCallState({
+    // Stop screen share if active
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current = null;
+      screenSenderRef.current = null;
+    }
+
+    const newState = {
       isInCall: false,
       callStatus: null,
       caller: null,
@@ -104,9 +137,11 @@ export const CallProvider = ({ children }) => {
       remoteStream: null,
       callStartTime: null,
       callDuration: 0,
-    });
+    };
+    setCallState(newState);
+    localStorage.removeItem('callState');
 
-    socket?.emit('call_end', { room_id: callState.roomId });
+    socket?.emit('call_end', { call_id: callIdRef.current, room_id: callState.roomId, from: user?.username });
   }, [socket, callState]);
 
   // Create a peer connection bound to a specific roomId to avoid closure-stale room_id on ICE events
@@ -123,19 +158,24 @@ export const CallProvider = ({ children }) => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate && user) {
+        console.log(`[WebRTC] Sending ICE candidate:`, event.candidate.type);
         try {
           socket?.emit('call_ice_candidate', {
+            call_id: callIdRef.current,
             room_id: pcRoomId,
             from: user.username,
             candidate: event.candidate,
           });
         } catch (err) {
-          console.error('Failed to emit ICE candidate', err);
+          console.error('[WebRTC] Failed to emit ICE candidate', err);
         }
+      } else if (!event.candidate) {
+        console.log('[WebRTC] ICE gathering complete');
       }
     };
 
     pc.ontrack = (event) => {
+      console.log('[WebRTC] Received remote track:', event.track.kind);
       setCallState(prev => ({
         ...prev,
         remoteStream: event.streams[0],
@@ -144,13 +184,14 @@ export const CallProvider = ({ children }) => {
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
+      console.log(`[WebRTC] Connection state: ${state}`);
       if (state === 'connected') {
         // Connected - clear any pending disconnect-triggered end
         if (disconnectTimeoutRef.current) {
           clearTimeout(disconnectTimeoutRef.current);
           disconnectTimeoutRef.current = null;
         }
-        setCallState(prev => ({ ...prev, callStatus: 'connected', callStartTime: Date.now() }));
+        setCallState(prev => ({ ...prev, callStatus: 'connected', callStartTime: prev.callStartTime || Date.now() }));
         return;
       }
 
@@ -170,6 +211,29 @@ export const CallProvider = ({ children }) => {
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      const iceState = pc.iceConnectionState;
+      console.log(`[WebRTC] ICE connection state: ${iceState}`);
+      
+      if (iceState === 'connected' || iceState === 'completed') {
+        // ICE connected - update UI to connected if not already
+        setCallState(prev => ({
+          ...prev,
+          callStatus: 'connected',
+          callStartTime: prev.callStartTime || Date.now()
+        }));
+      } else if (iceState === 'failed') {
+        console.error('[WebRTC] ICE connection failed - may need TURN server');
+        endCall();
+      } else if (iceState === 'disconnected') {
+        console.warn('[WebRTC] ICE disconnected - connection may recover');
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      console.log(`[WebRTC] ICE gathering state: ${pc.iceGatheringState}`);
+    };
+
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         try { pc.addTrack(track, localStreamRef.current); } catch (e) { console.warn('addTrack failed', e); }
@@ -186,17 +250,41 @@ export const CallProvider = ({ children }) => {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: isVideo,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 1,
+          volume: 1.0,
+          googEchoCancellation: true,
+          googNoiseSuppression: true,
+          googAutoGainControl: true,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true
+        },
+        video: isVideo ? {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 30 },
+          facingMode: 'user',
+          aspectRatio: 16/9
+        } : false
       });
 
       localStreamRef.current = stream;
+      
+      // Generate call_id for caller
+      const callId = `call_${Date.now()}_${user.username}`;
+      callIdRef.current = callId;
+      
       setCallState({
         isInCall: true,
         callStatus: 'calling',
         caller: user.username,
         callee: targetUser,
         roomId,
+        callId,
         localStream: stream,
         remoteStream: null,
       });
@@ -213,12 +301,16 @@ export const CallProvider = ({ children }) => {
 
       const offer = await peerConnectionRef.current.createOffer();
       await peerConnectionRef.current.setLocalDescription(offer);
+      console.log('[WebRTC] Created and set local offer, signaling state:', peerConnectionRef.current.signalingState);
 
       socket?.emit('call_offer', {
+        call_id: callId,
         room_id: roomId,
         from: user.username,
         signal: offer,
+        call_type: isVideo ? 'video' : 'audio',
       });
+      console.log('[WebRTC] Sent call offer to', targetUser);
 
       // Optional: auto end if not answered in 60s
       callTimeoutRef.current = setTimeout(() => {
@@ -240,10 +332,29 @@ export const CallProvider = ({ children }) => {
 
     try {
       const wantsVideo = !!incomingOfferHasVideoRef.current;
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: wantsVideo, // request video when offer included it
-      });
+      
+      // Try to get media with graceful fallback for video
+      let stream;
+      if (wantsVideo) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: true,
+          });
+        } catch (videoError) {
+          console.warn('[WebRTC] Video failed, falling back to audio-only:', videoError.message);
+          // Fallback to audio-only if video fails
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+        }
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+      }
 
       localStreamRef.current = stream;
 
@@ -263,21 +374,20 @@ export const CallProvider = ({ children }) => {
       // Create answer (remote description already set in handleIncomingOffer)
       const answer = await peerConnectionRef.current.createAnswer();
       await peerConnectionRef.current.setLocalDescription(answer);
+      console.log('[WebRTC] Created and set local answer, signaling state:', peerConnectionRef.current.signalingState);
 
       socket?.emit('call_answer', {
+        call_id: callIdRef.current,
         room_id: callState.roomId,
         from: user.username,
         signal: answer,
       });
+      console.log('[WebRTC] Sent call answer');
 
-      // Set call as connected and start timing
-      setCallState(prev => ({
-        ...prev,
-        callStatus: 'connected',
-        callStartTime: Date.now()
-      }));
+      // Don't set connected here - wait for onconnectionstatechange
     } catch (error) {
       console.error('Error answering call:', error);
+      alert(`Failed to answer call: ${error.message}. Please check camera/microphone permissions and ensure no other app is using them.`);
       endCall();
     }
   }, [callState.roomId, socket, user, endCall]);
@@ -343,15 +453,130 @@ export const CallProvider = ({ children }) => {
     }
   }, [socket, callState.roomId, user]);
 
+  const startScreenShare = useCallback(async () => {
+    if (!peerConnectionRef.current || callState.callStatus !== 'connected') {
+      console.warn('[ScreenShare] Cannot start: call not connected');
+      return { success: false, error: 'Call not connected' };
+    }
+
+    try {
+      console.log('[ScreenShare] Starting screen share');
+      
+      // Request screen share with optimized settings
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: 'always',
+          displaySurface: 'monitor',
+          logicalSurface: true,
+          width: { max: 1920 },
+          height: { max: 1080 },
+          frameRate: { max: 15 } // Limit to 15fps for bandwidth
+        },
+        audio: false // Screen audio often causes issues
+      });
+
+      const screenTrack = screenStream.getVideoTracks()[0];
+      if (!screenTrack) {
+        throw new Error('No screen track available');
+      }
+
+      // Find and replace the video sender
+      const senders = peerConnectionRef.current.getSenders();
+      const videoSender = senders.find(s => s.track?.kind === 'video');
+
+      if (videoSender) {
+        // Replace existing video track
+        await videoSender.replaceTrack(screenTrack);
+        console.log('[ScreenShare] Replaced video track with screen');
+      } else {
+        // Add new track if no video sender exists
+        screenSenderRef.current = peerConnectionRef.current.addTrack(screenTrack, screenStream);
+        console.log('[ScreenShare] Added screen track');
+        
+        // Renegotiate
+        const offer = await peerConnectionRef.current.createOffer();
+        await peerConnectionRef.current.setLocalDescription(offer);
+        socket?.emit('call_offer', {
+          call_id: callIdRef.current,
+          room_id: callState.roomId,
+          from: user.username,
+          signal: offer,
+        });
+      }
+
+      screenStreamRef.current = screenStream;
+
+      // Handle when user stops sharing via browser UI
+      screenTrack.onended = () => {
+        console.log('[ScreenShare] Screen share ended by user');
+        stopScreenShare();
+      };
+
+      // Notify backend
+      socket?.emit('screen_share_start', {
+        call_id: callIdRef.current,
+        from: user.username,
+      });
+
+      return { success: true, stream: screenStream };
+    } catch (error) {
+      console.error('[ScreenShare] Failed to start:', error);
+      return { success: false, error: error.message };
+    }
+  }, [callState, socket, user]);
+
+  const stopScreenShare = useCallback(async () => {
+    if (!screenStreamRef.current) {
+      return;
+    }
+
+    try {
+      console.log('[ScreenShare] Stopping screen share');
+
+      // Stop screen tracks
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+
+      // Restore camera if available
+      if (localStreamRef.current && peerConnectionRef.current) {
+        const videoTrack = localStreamRef.current.getVideoTracks()[0];
+        const senders = peerConnectionRef.current.getSenders();
+        const videoSender = senders.find(s => s.track?.kind === 'video');
+
+        if (videoSender && videoTrack) {
+          await videoSender.replaceTrack(videoTrack);
+          console.log('[ScreenShare] Restored camera track');
+        } else if (videoSender) {
+          // Remove screen track if no camera
+          await videoSender.replaceTrack(null);
+          console.log('[ScreenShare] Removed screen track');
+        }
+      }
+
+      screenStreamRef.current = null;
+      screenSenderRef.current = null;
+
+      // Notify backend
+      socket?.emit('screen_share_stop', {
+        call_id: callIdRef.current,
+        from: user.username,
+      });
+    } catch (error) {
+      console.error('[ScreenShare] Failed to stop:', error);
+    }
+  }, [socket, user]);
+
   useEffect(() => {
     if (!socket) return;
 
     const handleIncomingOffer = async (data) => {
-      const { signal, from, room_id } = data;
+      const { signal, from, room_id, call_id } = data;
       if (!user) {
         console.error('Cannot handle incoming offer: user not available');
         return;
       }
+
+      // Clear pending ICE candidates for new call
+      pendingIceCandidatesRef.current = [];
 
       // Detect whether the offer contains a video m-line so we can request video when answering/renegotiating
       try {
@@ -364,6 +589,16 @@ export const CallProvider = ({ children }) => {
       if (callState.isInCall && peerConnectionRef.current && callState.roomId === room_id) {
         try {
           await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+          
+          // Process any pending ICE candidates
+          while (pendingIceCandidatesRef.current.length > 0) {
+            const candidate = pendingIceCandidatesRef.current.shift();
+            try {
+              await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+              console.warn('Failed to add queued ICE candidate:', e);
+            }
+          }
         } catch (e) {
           console.error('Failed to set remote description on incoming re-offer', e);
         }
@@ -407,12 +642,14 @@ export const CallProvider = ({ children }) => {
       }
 
       // New incoming call
+      callIdRef.current = call_id; // Store in ref for ICE candidates
       setCallState({
         isInCall: true,
         callStatus: 'ringing',
         caller: from,
         callee: user.username,
         roomId: room_id,
+        callId: call_id,
         localStream: null,
         remoteStream: null,
       });
@@ -422,6 +659,16 @@ export const CallProvider = ({ children }) => {
 
       try {
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+        
+        // Process any pending ICE candidates that arrived early
+        while (pendingIceCandidatesRef.current.length > 0) {
+          const candidate = pendingIceCandidatesRef.current.shift();
+          try {
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (e) {
+            console.warn('Failed to add queued ICE candidate:', e);
+          }
+        }
       } catch (e) {
         console.error('Failed to set remote description on incoming offer', e);
       }
@@ -435,9 +682,21 @@ export const CallProvider = ({ children }) => {
 
     const handleIncomingAnswer = async (data) => {
       const { signal } = data;
+      console.log('[WebRTC] Received call answer');
       if (peerConnectionRef.current) {
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
-        setCallState(prev => ({ ...prev, callStatus: 'connected', callStartTime: Date.now() }));
+        console.log('[WebRTC] Set remote answer, signaling state:', peerConnectionRef.current.signalingState);
+        // Process pending ICE candidates after setting remote description
+        while (pendingIceCandidatesRef.current.length > 0) {
+          const candidate = pendingIceCandidatesRef.current.shift();
+          try {
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('[WebRTC] Added queued ICE candidate');
+          } catch (e) {
+            console.warn('Failed to add queued ICE candidate:', e);
+          }
+        }
+        // Don't set connected here - wait for onconnectionstatechange
       }
       // Clear call timeout when call is answered
       if (callTimeoutRef.current) {
@@ -448,12 +707,25 @@ export const CallProvider = ({ children }) => {
 
     const handleIceCandidate = async (data) => {
       const { candidate, from } = data;
-      if (peerConnectionRef.current) {
-        try {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (e) {
-          console.warn('Failed to add received ICE candidate', e);
-        }
+      console.log('[WebRTC] Received ICE candidate from', from);
+      
+      if (!peerConnectionRef.current) {
+        console.warn('[WebRTC] Received ICE candidate before peer connection ready - queuing');
+        pendingIceCandidatesRef.current.push(candidate);
+        return;
+      }
+      
+      if (!peerConnectionRef.current.remoteDescription) {
+        console.warn('[WebRTC] Received ICE candidate before remote description - queuing');
+        pendingIceCandidatesRef.current.push(candidate);
+        return;
+      }
+      
+      try {
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log('[WebRTC] Added ICE candidate successfully');
+      } catch (e) {
+        console.warn('[WebRTC] Failed to add received ICE candidate:', e);
       }
     };
 
@@ -479,7 +751,13 @@ export const CallProvider = ({ children }) => {
     };
   }, [socket, user, createPeerConnection, endCall, callState]);
 
-  // Update call duration every second when connected
+  useEffect(() => {
+    if (callState.isInCall) {
+      const { localStream, remoteStream, ...persistable } = callState;
+      localStorage.setItem('callState', JSON.stringify(persistable));
+    }
+  }, [callState]);
+
   useEffect(() => {
     let interval;
     if (callState.callStatus === 'connected' && callState.callStartTime) {
@@ -514,6 +792,9 @@ export const CallProvider = ({ children }) => {
     endCall,
     toggleAudio,
     toggleVideo,
+    startScreenShare,
+    stopScreenShare,
+    isScreenSharing: !!screenStreamRef.current,
   };
 
   return (

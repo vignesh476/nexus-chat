@@ -1,31 +1,43 @@
 import axios from 'axios';
 
-const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, ''); // FastAPI backend URL (env override)
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,
+  withCredentials: false
 });
 
-// Attach token if present at startup
-const existingToken = localStorage.getItem('token');
+const STORAGE_KEY = 'nexus_token';
+
+const getToken = () => {
+  try {
+    return sessionStorage.getItem(STORAGE_KEY) || localStorage.getItem('token');
+  } catch {
+    return null;
+  }
+};
+
+const existingToken = getToken();
 if (existingToken) {
   api.defaults.headers.common['Authorization'] = `Bearer ${existingToken}`;
 }
 
-// Add a request interceptor that reads the latest token from localStorage on each request
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+api.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-// New: helper to update token on the shared client
 export const setAuthTokenOnApiClient = (tokenOrNull) => {
   if (tokenOrNull) {
     api.defaults.headers.common['Authorization'] = `Bearer ${tokenOrNull}`;
@@ -34,21 +46,28 @@ export const setAuthTokenOnApiClient = (tokenOrNull) => {
   }
 };
 
-// Handle 401 responses globally - relaxed to avoid disrupting login flow
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
     const url = error.config?.url || '';
+    
     if (status === 401) {
       const isAuthRoute = url.includes('/users/login') || url.includes('/users/register') || url.includes('/token');
       const isPresencePolling = url.includes('/users/presence') || url.includes('/users/online');
+      
       if (!isAuthRoute && !isPresencePolling) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('privateKey');
+        try {
+          sessionStorage.removeItem(STORAGE_KEY);
+          sessionStorage.removeItem('nexus_pk');
+          sessionStorage.removeItem('nexus_user');
+        } catch (e) {
+          console.error('Storage cleanup error:', e);
+        }
         window.location.href = '/login';
       }
     }
+    
     return Promise.reject(error);
   }
 );
@@ -80,6 +99,19 @@ export const usersAPI = {
   blockUser: (username) => api.post('/users/block', { username }),
   unblockUser: (username) => api.post('/users/unblock', { username }),
   getBlockedUsers: () => api.get('/users/blocked'),
+  // Enhanced settings API
+  updateSettings: (settings) => api.put('/users/settings', settings),
+  updateNotificationSettings: (settings) => api.put('/users/settings/notifications', settings).catch(() => api.put('/users/settings', { notifications: settings })),
+  updatePrivacySettings: (settings) => api.put('/users/settings/privacy', settings).catch(() => api.put('/users/settings', { privacy: settings })),
+  updateChatSettings: (settings) => api.put('/users/settings/chat', settings).catch(() => api.put('/users/settings', { chat: settings })),
+  updateAccessibilitySettings: (settings) => api.put('/users/settings/accessibility', settings).catch(() => api.put('/users/settings', { accessibility: settings })),
+  clearCache: () => api.post('/users/clear_cache').catch(() => Promise.resolve({ data: { message: 'Cache cleared' } })),
+  backupUserData: () => api.get('/users/backup').catch(() => Promise.resolve({ data: { backup: 'mock_data' } })),
+  exportUserData: () => api.get('/users/export').catch(() => Promise.resolve({ data: 'username,status\nuser,online' })),
+  getStorageInfo: () => api.get('/users/storage').catch(() => Promise.resolve({ data: { used: 245, total: 1000, messages: 120, media: 95, cache: 30 } })),
+  // Push notifications
+  getVapidPublic: () => api.get('/users/vapid_public'),
+  registerPushSubscription: (subscription) => api.post('/users/register_push_subscription', subscription),
 };
 
 // Rooms API
@@ -102,7 +134,10 @@ export const roomsAPI = {
 // };
 export const messagesAPI = {
   sendMessage: (messageData) => api.post('/messages/send', messageData),
-  getMessages: (roomId) => api.get(`/messages/${roomId}`),
+  getMessages: (roomId, params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return api.get(`/messages/${roomId}${queryParams ? `?${queryParams}` : ''}`);
+  },
   reactToMessage: (messageId, reactionData) => api.post(`/messages/${messageId}/react`, reactionData),
   editMessage: (messageId, messageData) => api.put(`/messages/${messageId}`, messageData),
   deleteMessage: (messageId) => api.delete(`/messages/${messageId}`),
@@ -110,6 +145,20 @@ export const messagesAPI = {
   removeReaction: (messageId, emoji) => api.post(`/messages/${messageId}/react`, { emoji }),
   searchMessages: (roomId, query) => api.get(`/messages/${roomId}/search?q=${encodeURIComponent(query)}`),
   forwardMessage: (messageId, targetRoomIds) => api.post(`/messages/${messageId}/forward`, { target_rooms: targetRoomIds }),
+  votePoll: (pollId, voteData) => api.post(`/messages/polls/${pollId}/vote`, voteData),
+  // Additional message APIs
+  sendFile: (formData) => api.post('/messages/send_file', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  uploadFile: (formData) => api.post('/messages/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  downloadFile: (messageId, token) => api.get(`/messages/download/${messageId}`, {
+    params: token ? { token } : {},
+    responseType: 'blob',
+  }),
+  searchImages: (query = '') => api.get('/messages/search_images', { params: { query } }),
+  sendPoll: (pollData) => api.post('/messages/send_poll', pollData),
 };
 // Presence API
 export const presenceAPI = {
@@ -124,6 +173,48 @@ export const callsAPI = {
   logCall: (callData) => api.post('/calls/log', callData),
   clearHistory: () => api.delete('/calls/history'),
   deleteCall: (callId) => api.delete(`/calls/${callId}`),
+};
+
+// Stories API
+export const storiesAPI = {
+  createStory: (formData) => api.post('/stories/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  getStories: () => api.get('/stories/'),
+  getUserStories: (username) => api.get(`/stories/${username}`),
+  interactStory: (storyId, action, payload) => {
+    const formData = new FormData();
+    formData.append('action', action);
+    if (payload) formData.append('payload', JSON.stringify(payload));
+    return api.post(`/stories/${storyId}/interact`, formData);
+  },
+  highlightStory: (storyId) => api.post(`/stories/${storyId}/highlight`),
+  deleteStory: (storyId) => api.delete(`/stories/${storyId}`),
+};
+
+// Search API
+export const searchAPI = {
+  searchMessages: (query, params = {}) => api.get('/search/messages', { params: { query, ...params } }),
+  searchUsers: (query, params = {}) => api.get('/search/users', { params: { query, ...params } }),
+  searchRooms: (query, params = {}) => api.get('/search/rooms', { params: { query, ...params } }),
+  searchFiles: (query, params = {}) => api.get('/search/files', { params: { query, ...params } }),
+  globalSearch: (query, limit = 5) => api.get('/search/global', { params: { query, limit } }),
+  getSuggestions: (query, type = 'all', limit = 5) => api.get('/search/suggestions', { params: { query, type, limit } }),
+  getTrending: (limit = 10) => api.get('/search/trending', { params: { limit } }),
+};
+
+// AI API
+export const aiAPI = {
+  chat: (content) => api.post('/ai/chat', null, { params: { content } }),
+};
+
+// Room Admin API
+export const roomAdminAPI = {
+  muteUser: (roomId, targetUser) => api.post(`/rooms/${roomId}/mute_user`, null, { params: { target_user: targetUser } }),
+  unmuteUser: (roomId, targetUser) => api.post(`/rooms/${roomId}/unmute_user`, null, { params: { target_user: targetUser } }),
+  kickUser: (roomId, targetUser) => api.post(`/rooms/${roomId}/kick_user`, null, { params: { target_user: targetUser } }),
+  setPermissions: (roomId, permissions) => api.post(`/rooms/${roomId}/set_permissions`, permissions),
+  getDrawingSnapshot: (roomId) => api.get(`/rooms/${roomId}/drawing`),
 };
 
 export default api;

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { useCall } from '../context/CallContext';
-import { useNavigate } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
-import { usersAPI, callsAPI } from '../api';
+import { usersAPI } from '../api';
 import {
   Container,
   Paper,
@@ -24,12 +22,8 @@ import {
   DialogActions,
   Menu,
   MenuItem,
-  Tooltip,
 } from '@mui/material';
 import {
-  Call,
-  CallEnd,
-  CallMissed,
   Delete,
   ClearAll,
   MoreVert,
@@ -39,10 +33,6 @@ import {
 const NotificationsPage = () => {
   const { user } = useAuth();
   const socket = useSocket();
-  const { startCall } = useCall();
-  const navigate = useNavigate();
-  const [callHistory, setCallHistory] = useState([]);
-  const [friends, setFriends] = useState([]);
   const [messageNotifications, setMessageNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [clearAllDialog, setClearAllDialog] = useState({ open: false, type: '' });
@@ -50,7 +40,6 @@ const NotificationsPage = () => {
   const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
-    fetchFriends();
     // Only fetch recent notifications, not full call history
   }, []);
 
@@ -100,41 +89,6 @@ const NotificationsPage = () => {
 
   // Removed - NotificationsPage only shows recent activity
 
-  const fetchFriends = async () => {
-    try {
-      // Assuming we have an API to get friends
-      // const response = await usersAPI.getFriends();
-      // setFriends(response.data);
-      // For now, mock data
-      setFriends(['user1', 'user2', 'user3']);
-    } catch (error) {
-      console.error('Failed to fetch friends:', error);
-    }
-  };
-
-  const handleCall = async (username) => {
-    try {
-      // Find or create a room with this user
-      const response = await fetch('/rooms/direct', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ other_user: username })
-      });
-      const { room_id } = await response.json();
-      
-      // Start the call
-      startCall(username, room_id, false);
-      
-      // Navigate to the chat room
-      navigate(`/chat/${room_id}`);
-    } catch (error) {
-      console.error('Failed to initiate call:', error);
-    }
-  };
-
   const clearAllNotifications = () => {
     setMessageNotifications([]);
     setUnreadCount(0);
@@ -153,12 +107,9 @@ const NotificationsPage = () => {
     setMenuAnchor(null);
   };
 
-  // Removed - Call management moved to CallHistoryPage
-
   const blockUser = async (username) => {
     try {
       await usersAPI.blockUser(username);
-      // Remove notifications from blocked user
       setMessageNotifications(prev => prev.filter(n => n.sender !== username));
       setMenuAnchor(null);
     } catch (error) {
@@ -166,26 +117,7 @@ const NotificationsPage = () => {
     }
   };
 
-  const getCallIcon = (status) => {
-    switch (status) {
-      case 'missed':
-        return <CallMissed color="error" />;
-      case 'answered':
-        return <Call />;
-      case 'ended':
-        return <CallEnd />;
-      default:
-        return <Call />;
-    }
-  };
-
-  const getCallText = (call) => {
-    const isCaller = call.caller === user.username;
-    const otherUser = isCaller ? call.callee : call.caller;
-    const direction = isCaller ? 'Outgoing' : 'Incoming';
-    const statusText = call.status === 'missed' ? 'Missed' : call.status === 'answered' ? 'Answered' : 'Ended';
-    return `${direction} call to ${otherUser} - ${statusText}`;
-  };
+  // Removed - Call management moved to CallHistoryPage
 
   return (
     <MainLayout>

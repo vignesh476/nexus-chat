@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
-
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { List, ListItem, ListItemText, Typography, Box, IconButton, Chip, Badge, Button, Menu, MenuItem, Popover, Tooltip } from '@mui/material';
 import { useTheme } from '../context/ThemeContext';
 import { useMood } from '../context/MoodContext';
 import { useAuth } from '../context/AuthContext';
+import useResponsive from '../hooks/useResponsive';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import { messagesAPI } from '../api';
 import Reply from '@mui/icons-material/Reply';
+import AccessTime from '@mui/icons-material/AccessTime';
+import Done from '@mui/icons-material/Done';
+import DoneAll from '@mui/icons-material/DoneAll';
+import '../styles/mobile-chat.css';
+import '../styles/mobile-chat-improvements.css';
 // import MessageActions from './MessageActions'; // Commented out unused import
 
 // Add CSS animations for games
@@ -41,6 +46,7 @@ if (typeof document !== 'undefined' && !document.getElementById('game-styles')) 
 
 const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onLudoJoin, onTicTacToeJoin, onTriviaJoin, onLudoEnd, onTicTacToeEnd, onTriviaEnd, onLudoSync = () => {}, onTicTacToeSync = () => {}, onTriviaSync = () => {}, aiTyping, ludoGame, ticTacToeGame, triviaGame }) => {
   const { user } = useAuth();
+  const { isMobile } = useResponsive();
   const { darkMode, messageStyle, getBackgroundStyle, getFontSizeValue, getMessageBubbleStyle } = useTheme() || {
     darkMode: false,
     messageStyle: 'bubble',
@@ -64,20 +70,127 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
 
   const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '🎉', '😢'];
 
+  // Event handlers to prevent arrow functions in JSX
+  const handleImageClick = useCallback((msg) => {
+    window.open(`http://127.0.0.1:8000/messages/download/${msg._id}`, '_blank');
+  }, []);
+  
+  const handleRockClick = useCallback(() => onRPSPlay && onRPSPlay('rock'), [onRPSPlay]);
+  const handlePaperClick = useCallback(() => onRPSPlay && onRPSPlay('paper'), [onRPSPlay]);
+  const handleScissorsClick = useCallback(() => onRPSPlay && onRPSPlay('scissors'), [onRPSPlay]);
+  
+  const handleLudoJoin = useCallback((message) => {
+    handleJoinClick(message, onLudoJoin);
+  }, [onLudoJoin]);
+  
+  const handleLudoSync = useCallback(() => onLudoSync && onLudoSync(), [onLudoSync]);
+  const handleLudoEnd = useCallback(() => onLudoEnd(), [onLudoEnd]);
+  
+  const handleTicTacToeJoin = useCallback((message) => {
+    handleJoinClick(message, onTicTacToeJoin);
+  }, [onTicTacToeJoin]);
+  
+  const handleTicTacToeSync = useCallback(() => onTicTacToeSync && onTicTacToeSync(), [onTicTacToeSync]);
+  const handleTicTacToeEnd = useCallback(() => onTicTacToeEnd(), [onTicTacToeEnd]);
+  
+  const handleTriviaJoin = useCallback((message) => {
+    handleJoinClick(message, onTriviaJoin);
+  }, [onTriviaJoin]);
+  
+  const handleTriviaSync = useCallback(() => onTriviaSync && onTriviaSync(), [onTriviaSync]);
+  const handleTriviaEnd = useCallback(() => onTriviaEnd(), [onTriviaEnd]);
+
+  // Message status component
+  const MessageStatus = ({ status, timestamp }) => {
+    const getStatusIcon = () => {
+      switch (status) {
+        case 'sending': return <AccessTime sx={{ fontSize: 14, opacity: 0.6 }} />;
+        case 'sent': return <Done sx={{ fontSize: 14, opacity: 0.6 }} />;
+        case 'delivered': return <DoneAll sx={{ fontSize: 14, opacity: 0.6 }} />;
+        case 'read': return <DoneAll sx={{ fontSize: 14, color: '#0084ff' }} />;
+        default: return null;
+      }
+    };
+
+    const formatTime = (ts) => {
+      const date = new Date(ts);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'now';
+      if (diffMins < 60) return `${diffMins}m`;
+      if (diffHours < 24) return `${diffHours}h`;
+      if (diffDays < 7) return `${diffDays}d`;
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    };
+
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <span>{formatTime(timestamp)}</span>
+        {getStatusIcon()}
+      </Box>
+    );
+  };
+
+  // Swipe-to-reply wrapper (simplified without custom hook)
+  const SwipeableMessage = ({ msg, children }) => {
+    const touchStartX = useRef(0);
+    const elementRef = useRef(null);
+
+    const handleTouchStart = (e) => {
+      touchStartX.current = e.touches[0].clientX;
+    };
+
+    const handleTouchMove = (e) => {
+      if (!elementRef.current) return;
+      const deltaX = e.touches[0].clientX - touchStartX.current;
+      if (deltaX > 10) {
+        elementRef.current.style.transform = `translateX(${Math.min(deltaX, 100)}px)`;
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (!elementRef.current) return;
+      const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+      elementRef.current.style.transform = 'translateX(0)';
+      if (deltaX > 60 && onReply) {
+        onReply(msg);
+        if (navigator.vibrate) navigator.vibrate(20);
+      }
+    };
+
+    return (
+      <div 
+        ref={elementRef} 
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ transition: 'transform 0.3s ease' }}
+      >
+        {children}
+      </div>
+    );
+  };
+
   const openMenu = (event, msg) => {
     event.stopPropagation();
-    const anchor = (messageRefs.current && messageRefs.current[msg._id]) || event.currentTarget;
+    // Use the message bubble itself as anchor for better positioning
+    const anchor = messageRefs.current[msg._id] || event.currentTarget;
     setMenuAnchorEl(anchor);
     setMenuMessageId(msg._id);
   };
   const closeMenu = () => {
     setMenuAnchorEl(null);
     setMenuMessageId(null);
-  }; 
+  };
 
   const openEmojiPopover = (event, msg) => {
     event.stopPropagation();
-    const anchor = (messageRefs.current && messageRefs.current[msg._id]) || event.currentTarget;
+    // Use the message bubble itself as anchor for better positioning
+    const anchor = messageRefs.current[msg._id] || event.currentTarget;
     setEmojiAnchorEl(anchor);
     setEmojiMessageId(msg._id);
     closeMenu();
@@ -109,20 +222,17 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
     }
   }
 
-  // Update mood when new messages arrive
+  // Update mood when new messages arrive - with stable reference
+  const lastMessageId = useRef(null);
   useEffect(() => {
     if (messages?.length > 0) {
       const latestMessage = messages[messages.length - 1];
-      if (latestMessage.content) {
+      if (latestMessage.content && latestMessage._id && latestMessage._id !== lastMessageId.current) {
+        lastMessageId.current = latestMessage._id;
         updateMood(latestMessage.content);
       }
     }
-  }, [messages, updateMood]);
-
-  // Debug: Log when messages prop changes
-  useEffect(() => {
-    console.log('[MessageList] Messages prop changed:', messages?.length || 0, 'messages');
-  }, [messages]);
+  }, [messages?.length, updateMood]);
 
   // Auto-scroll to bottom when messages change (only when newest appended)
   useEffect(() => {
@@ -174,7 +284,6 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
     }
   }, []); // Empty dependency array - runs only on mount
 
-  console.log('[MessageList] Rendering messages:', messages?.length || 0, 'messages'); // Debug log
 
   const getContextualBackground = (msg, isOwn) => {
     if (msg.message_type === 'game' || msg.game_type) {
@@ -326,9 +435,7 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
               objectFit: 'contain',
               cursor: 'pointer'
             }}
-            onClick={(e) => {
-              window.open(`http://127.0.0.1:8000/messages/download/${msg._id}`, '_blank');
-            }}
+            onClick={() => handleImageClick(msg)}
           />
           {msg.content && <Typography variant="body2" sx={{ mt: 1 }}>{msg.content}</Typography>}
         </Box>
@@ -372,6 +479,8 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       );
     } else if (msg.type === 'gif' || msg.message_type === 'gif') {
       return renderGifMessage(msg);
+    } else if (msg.message_type === 'poll' || msg.type === 'poll') {
+      return renderPollMessage(msg);
     } else if (msg.message_type === 'game' || msg.game_type) {
       return renderGameMessage(msg);
     } else {
@@ -458,8 +567,37 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
     }
   };
 
+  const linkifyText = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    
+    return parts.map((part, index) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a 
+            key={index} 
+            href={part} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ 
+              color: 'inherit', 
+              textDecoration: 'underline',
+              fontWeight: 500
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
   const highlightSearchTerm = (text, searchTerm) => {
-    if (!searchTerm || !text) return text;
+    if (!searchTerm || !text) return linkifyText(text);
 
     const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     const parts = text.split(regex);
@@ -470,7 +608,7 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
           {part}
         </mark>
       ) : (
-        part
+        linkifyText(part)
       )
     );
   };
@@ -517,39 +655,51 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       case 'rps_start':
         return (
           <Box sx={{
-            p: 2,
+            p: isMobile ? 1.5 : 2,
             bgcolor: 'success.light',
             borderRadius: 2,
             textAlign: 'center'
           }}>
-            <Typography variant="h4">🎮</Typography>
-            <Typography variant="h6">Rock Paper Scissors</Typography>
-            <Typography variant="body1" sx={{ mb: 2 }}>
+            <Typography variant={isMobile ? 'body2' : 'h6'}>🎮 Rock Paper Scissors</Typography>
+            <Typography variant="body2" sx={{ mb: isMobile ? 1 : 2, fontSize: isMobile ? '0.8rem' : '1rem' }}>
               {highlightSearchTerm(message.content, searchQuery)}
             </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <Button
-                variant="contained"
-                onClick={() => onRPSPlay && onRPSPlay('rock')}
-                sx={{ minWidth: 80 }}
-              >
-                ✊ Rock
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => onRPSPlay && onRPSPlay('paper')}
-                sx={{ minWidth: 80 }}
-              >
-                ✋ Paper
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => onRPSPlay && onRPSPlay('scissors')}
-                sx={{ minWidth: 80 }}
-              >
-                ✌ Scissors
-              </Button>
-            </Box>
+            {isMobile ? (
+              // Mobile: Touch-friendly buttons
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleRockClick}
+                  sx={{ minHeight: 44, fontSize: '0.9rem' }}
+                  fullWidth
+                >
+                  ✊ Rock
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handlePaperClick}
+                  sx={{ minHeight: 44, fontSize: '0.9rem' }}
+                  fullWidth
+                >
+                  ✋ Paper
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleScissorsClick}
+                  sx={{ minHeight: 44, fontSize: '0.9rem' }}
+                  fullWidth
+                >
+                  ✌ Scissors
+                </Button>
+              </Box>
+            ) : (
+              // Desktop: Horizontal layout
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Button variant="contained" onClick={handleRockClick} sx={{ minWidth: 80 }}>✊ Rock</Button>
+                <Button variant="contained" onClick={handlePaperClick} sx={{ minWidth: 80 }}>✋ Paper</Button>
+                <Button variant="contained" onClick={handleScissorsClick} sx={{ minWidth: 80 }}>✌ Scissors</Button>
+              </Box>
+            )}
           </Box>
         );
 
@@ -629,39 +779,52 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       case 'ludo_start':
         return (
           <Box sx={{
-            p: 2,
+            p: isMobile ? 1.5 : 2,
             bgcolor: 'warning.light',
             borderRadius: 2,
             textAlign: 'center'
           }}>
-            <Typography variant="h4">🏁</Typography>
-            <Typography variant="h6">Ludo Game Started!</Typography>
-            <Typography variant="body1" sx={{ mb: 2 }}>
+            <Typography variant={isMobile ? 'body2' : 'h6'}>🏁 Ludo Game Started!</Typography>
+            <Typography variant="body2" sx={{ mb: isMobile ? 1 : 2, fontSize: isMobile ? '0.8rem' : '1rem' }}>
               {highlightSearchTerm(message.content, searchQuery)}
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: 1 }}>
               <Button
                 variant="contained"
                 color="warning"
-                onClick={() => handleJoinClick(message, onLudoJoin)}
+                onClick={() => handleLudoJoin(message)}
                 disabled={joining[message._id] || (ludoGame?.players?.includes(user.username)) || message.participants?.includes(user.username)}
+                sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                fullWidth={isMobile}
               >
                 {joining[message._id] ? 'Joining...' : ((ludoGame?.players?.includes(user.username) || message.participants?.includes(user.username)) ? 'Joined' : 'Join Game')}
               </Button>
               {message.participants && message.participants.length > 0 && !ludoGame && (
-                <Button variant="outlined" color="info" onClick={() => onLudoSync && onLudoSync()}>
+                <Button 
+                  variant="outlined" 
+                  color="info" 
+                  onClick={handleLudoSync}
+                  sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                  fullWidth={isMobile}
+                >
                   Sync Game
                 </Button>
               )}
               {(message.owner === user.username || message.sender === user.username) && onLudoEnd && (
-                <Button variant="outlined" color="error" onClick={() => onLudoEnd()}>
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  onClick={handleLudoEnd}
+                  sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                  fullWidth={isMobile}
+                >
                   End Game
                 </Button>
               )}
             </Box>
             {message.participants && message.participants.length > 0 && (
               <Box sx={{ mt: 1 }}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: isMobile ? '0.7rem' : '0.75rem' }}>
                   Players: {message.participants.join(', ')}
                 </Typography>
               </Box>
@@ -691,32 +854,45 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       case 'tic_tac_toe_start':
         return (
           <Box sx={{
-            p: 2,
+            p: isMobile ? 1.5 : 2,
             bgcolor: 'info.light',
             borderRadius: 2,
             textAlign: 'center'
           }}>
-            <Typography variant="h4">⭕</Typography>
-            <Typography variant="h6">Tic-Tac-Toe Started!</Typography>
-            <Typography variant="body1" sx={{ mb: 2 }}>
+            <Typography variant={isMobile ? 'body2' : 'h6'}>⭕ Tic-Tac-Toe Started!</Typography>
+            <Typography variant="body2" sx={{ mb: isMobile ? 1 : 2, fontSize: isMobile ? '0.8rem' : '1rem' }}>
               {highlightSearchTerm(message.content, searchQuery)}
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: 1 }}>
               <Button
                 variant="contained"
                 color="info"
-                onClick={() => handleJoinClick(message, onTicTacToeJoin)}
+                onClick={() => handleTicTacToeJoin(message)}
                 disabled={joining[message._id] || (ticTacToeGame?.players?.includes(user.username)) || message.participants?.includes(user.username)}
+                sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                fullWidth={isMobile}
               >
                 {joining[message._id] ? 'Joining...' : ((ticTacToeGame?.players?.includes(user.username) || message.participants?.includes(user.username)) ? 'Joined' : 'Join Game')}
               </Button>
               {message.participants && message.participants.length > 0 && !ticTacToeGame && (
-                <Button variant="outlined" color="info" onClick={() => onTicTacToeSync && onTicTacToeSync()}>
+                <Button 
+                  variant="outlined" 
+                  color="info" 
+                  onClick={handleTicTacToeSync}
+                  sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                  fullWidth={isMobile}
+                >
                   Sync Game
                 </Button>
               )}
               {(message.owner === user.username || message.sender === user.username) && onTicTacToeEnd && (
-                <Button variant="outlined" color="error" onClick={() => onTicTacToeEnd()}>
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  onClick={handleTicTacToeEnd}
+                  sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                  fullWidth={isMobile}
+                >
                   End Game
                 </Button>
               )}
@@ -744,32 +920,45 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
       case 'trivia_start':
         return (
           <Box sx={{
-            p: 2,
+            p: isMobile ? 1.5 : 2,
             bgcolor: 'secondary.light',
             borderRadius: 2,
             textAlign: 'center'
           }}>
-            <Typography variant="h4">🧠</Typography>
-            <Typography variant="h6">Trivia Quiz Started!</Typography>
-            <Typography variant="body1" sx={{ mb: 2 }}>
+            <Typography variant={isMobile ? 'body2' : 'h6'}>🧠 Trivia Quiz Started!</Typography>
+            <Typography variant="body2" sx={{ mb: isMobile ? 1 : 2, fontSize: isMobile ? '0.8rem' : '1rem' }}>
               {highlightSearchTerm(message.content, searchQuery)}
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: 1 }}>
               <Button
                 variant="contained"
                 color="secondary"
-                onClick={() => handleJoinClick(message, onTriviaJoin)}
+                onClick={() => handleTriviaJoin(message)}
                 disabled={joining[message._id] || (triviaGame?.participants?.includes(user.username)) || message.participants?.includes(user.username)}
+                sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                fullWidth={isMobile}
               >
                 {joining[message._id] ? 'Joining...' : ((triviaGame?.participants?.includes(user.username) || message.participants?.includes(user.username)) ? 'Joined' : 'Join Game')}
               </Button>
               {message.participants && message.participants.length > 0 && !triviaGame && (
-                <Button variant="outlined" color="info" onClick={() => onTriviaSync && onTriviaSync()}>
+                <Button 
+                  variant="outlined" 
+                  color="info" 
+                  onClick={handleTriviaSync}
+                  sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                  fullWidth={isMobile}
+                >
                   Sync Game
                 </Button>
               )}
               {(message.owner === user.username || message.sender === user.username) && onTriviaEnd && (
-                <Button variant="outlined" color="error" onClick={() => onTriviaEnd()}>
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  onClick={handleTriviaEnd}
+                  sx={{ minHeight: isMobile ? 44 : 'auto', fontSize: isMobile ? '0.9rem' : '1rem' }}
+                  fullWidth={isMobile}
+                >
                   End Game
                 </Button>
               )}
@@ -850,6 +1039,66 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
     );
   };
 
+  const renderPollMessage = (message) => {
+    const pollData = message.poll_data || {};
+    const question = pollData.question || message.content;
+    const options = pollData.options || [];
+    const votes = pollData.votes || [];
+    
+    // Calculate vote counts
+    const voteCounts = {};
+    options.forEach(opt => { voteCounts[opt] = 0; });
+    votes.forEach(vote => {
+      (vote.options || []).forEach(opt => {
+        if (voteCounts[opt] !== undefined) voteCounts[opt]++;
+      });
+    });
+    
+    const totalVotes = votes.length;
+    const userVote = votes.find(v => v.user === user.username);
+    
+    const handleVote = async (option) => {
+      try {
+        await messagesAPI.votePoll(message._id, { options: [option] });
+      } catch (error) {
+        console.error('Failed to vote:', error);
+      }
+    };
+    
+    return (
+      <Box sx={{ p: isMobile ? 1.5 : 2, bgcolor: 'info.light', borderRadius: 2 }}>
+        <Typography variant={isMobile ? 'body1' : 'h6'} sx={{ mb: 2, fontWeight: 600 }}>📊 {question}</Typography>
+        {options.map((option, index) => {
+          const count = voteCounts[option] || 0;
+          const percentage = totalVotes > 0 ? (count / totalVotes * 100).toFixed(0) : 0;
+          const isVoted = userVote?.options?.includes(option);
+          
+          return (
+            <Box key={index} sx={{ mb: 1 }}>
+              <Button
+                fullWidth
+                variant={isVoted ? 'contained' : 'outlined'}
+                onClick={() => handleVote(option)}
+                sx={{ 
+                  justifyContent: 'space-between', 
+                  textAlign: 'left',
+                  minHeight: isMobile ? 44 : 'auto',
+                  fontSize: isMobile ? '0.9rem' : '1rem'
+                }}
+              >
+                <span>{option}</span>
+                <span>{count} ({percentage}%)</span>
+              </Button>
+            </Box>
+          );
+        })}
+        <Typography variant="caption" sx={{ mt: 1, display: 'block', fontSize: isMobile ? '0.7rem' : '0.75rem' }}>
+          {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+        </Typography>
+      </Box>
+    );
+  };
+
   const renderReplyPreview = (parentMessageId) => {
     if (!parentMessageId) return null;
 
@@ -880,105 +1129,157 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
   };
 
   return (
-    <Box sx={{ 
-      flexGrow: 1, 
-      overflow: 'auto', 
-      p: 2, 
-      display: 'flex', 
-      flexDirection: 'column', 
-      scrollBehavior: 'smooth',
-      background: getBackgroundStyle(),
-      transition: 'background 1s ease',
-      fontSize: getFontSizeValue()
-    }}>
+    <Box 
+      className="chat-body messages-container"
+      sx={{ 
+        flexGrow: 1, 
+        overflow: 'auto', 
+        p: 0,
+        display: 'flex', 
+        flexDirection: 'column', 
+        scrollBehavior: 'smooth',
+        background: 'transparent !important',
+        transition: 'background 1s ease',
+        fontSize: getFontSizeValue(),
+        WebkitOverflowScrolling: 'touch',
+        // Force visibility
+        opacity: '1 !important',
+        visibility: 'visible !important',
+        // Remove extra spacing
+        '& .MuiList-root': {
+          p: 0
+        },
+        // Force message visibility
+        '& .MuiListItem-root': {
+          opacity: '1 !important',
+          visibility: 'visible !important',
+        },
+        '& .MuiTypography-root': {
+          opacity: '1 !important',
+          visibility: 'visible !important',
+        }
+      }}
+    >
       {!messages || messages.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 4 }}>
           No messages yet. Start chatting!
         </Typography>
       ) : (
-        <List sx={{ flexGrow: 1 }}>
+        <List sx={{ flexGrow: 1, p: 0, m: 0 }}>
           {messages.map((msg, index) => {
             const isCurrentUser = msg.sender === user.username;
             return (
-              <div
-                key={msg._id || index}
-                ref={(el) => (messageRefs.current[msg._id || index] = el)}
-              >
+              <SwipeableMessage key={msg._id || index} msg={msg}>
+                <div ref={(el) => (messageRefs.current[msg._id || index] = el)}>
                   <ListItem
                     sx={{
                       alignItems: 'flex-end',
                       justifyContent: isCurrentUser ? 'flex-end' : 'flex-start',
                       flexDirection: 'column',
+                      px: isMobile ? 1 : 2,
+                      py: isMobile ? 0.5 : 0.75,
+                      minHeight: 'auto'
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, alignSelf: isCurrentUser ? 'flex-end' : 'flex-start' }}>
-                      {/* Avatar placeholder for alignment – can be wired to real avatars */}
-                      <Box sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        bgcolor: isCurrentUser ? 'primary.light' : 'grey.400',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                        display: 'inline-block'
-                      }} aria-hidden />
+                    <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: isMobile ? 0.5 : 1, alignSelf: isCurrentUser ? 'flex-end' : 'flex-start', width: '100%', maxWidth: '100%', flexDirection: isCurrentUser ? 'row-reverse' : 'row' }}>
+                      {/* Avatar - smaller on mobile */}
+                      {!isMobile && (
+                        <Box sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          bgcolor: isCurrentUser ? 'primary.light' : 'grey.400',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                          display: 'inline-block',
+                          flexShrink: 0
+                        }} aria-hidden />
+                      )}
 
                       <Box
                         ref={(el) => (messageRefs.current[msg._id] = el)}
                         sx={{
                           position: 'relative',
-                          maxWidth: { xs: '82%', sm: '70%' },
-                          alignSelf: isCurrentUser ? 'flex-end' : 'flex-start',
+                          maxWidth: isMobile ? '70%' : '60%',
+                          minWidth: isMobile ? '80px' : 'auto',
                           opacity: msg.pending ? 0.6 : 1,
-                          ...getMessageBubbleStyle(isCurrentUser, msg),
-                          p: messageStyle === 'minimal' ? 0.75 : 1.25,
-                          mb: 1.5,
-                          border: messageStyle === 'minimal' ? `1px solid ${darkMode ? '#555' : '#e0e0e0'}` : 'none',
-                          '&:hover': { transform: 'translateY(-1px)', filter: 'brightness(1.1)' },
+                          backgroundColor: isCurrentUser 
+                            ? (darkMode ? '#1976d2' : '#2196f3')
+                            : (darkMode ? '#424242' : '#f5f5f5'),
+                          color: isCurrentUser 
+                            ? '#ffffff'
+                            : (darkMode ? '#ffffff' : '#000000'),
+                          borderRadius: isMobile ? '18px' : '18px',
+                          p: isMobile ? '8px 12px' : '10px 14px',
+                          mb: isMobile ? 0.25 : 0.5,
+                          fontSize: isMobile ? '0.875rem' : '1rem',
+                          boxShadow: isCurrentUser 
+                            ? '0 1px 8px rgba(33, 150, 243, 0.2)' 
+                            : '0 1px 8px rgba(0, 0, 0, 0.1)',
+                          '&:hover': { transform: !isMobile ? 'translateY(-1px)' : 'none' },
+                          wordWrap: 'break-word',
+                          overflowWrap: 'break-word',
+                          lineHeight: 1.4,
+                          // Modern chat bubble styling
+                          border: 'none',
+                          outline: 'none'
                         }}
-                        onMouseEnter={() => setHoveredMessageId(msg._id)}
-                        onMouseLeave={() => setHoveredMessageId(null)}
+                        onMouseEnter={() => !isMobile && setHoveredMessageId(msg._id)}
+                        onMouseLeave={() => !isMobile && setHoveredMessageId(null)}
+                        onTouchStart={() => {
+                          if (isMobile) {
+                            setHoveredMessageId(msg._id);
+                          }
+                        }}
+                        onTouchEnd={() => {
+                          if (isMobile) {
+                            // Keep menu visible longer on mobile
+                            setTimeout(() => setHoveredMessageId(null), 3000);
+                          }
+                        }}
+                        onClick={() => {
+                          if (isMobile && hoveredMessageId !== msg._id) {
+                            setHoveredMessageId(msg._id);
+                            setTimeout(() => setHoveredMessageId(null), 3000);
+                          }
+                        }}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                          <Badge
-                            overlap="circular"
-                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                            variant="dot"
-                            sx={{
-                              '& .MuiBadge-badge': {
-                                backgroundColor: userPresence[msg.sender]?.status === 'online' ? '#44b700' : userPresence[msg.sender]?.status === 'away' ? '#ff9800' : userPresence[msg.sender]?.status === 'busy' ? '#f44336' : '#9e9e9e',
-                                color: 'transparent',
-                                boxShadow: `0 0 0 2px ${darkMode ? '#121212' : '#fff'}`,
-                              },
-                            }}
-                          >
-                            <Typography variant="caption" sx={{ fontWeight: '600', mr: 1, color: darkMode ? '#e0e0e0' : 'text.secondary', letterSpacing: 0.2 }}>
+                        {/* Header - simplified for mobile */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: isMobile ? 0.25 : 0.5, justifyContent: isCurrentUser ? 'flex-end' : 'flex-start' }}>
+                          {!isCurrentUser && (
+                            <Typography variant={isMobile ? 'caption' : 'caption'} sx={{ 
+                              fontWeight: '600', 
+                              mr: 1, 
+                              color: darkMode ? '#e0e0e0' : 'text.secondary', 
+                              letterSpacing: 0.2,
+                              fontSize: isMobile ? '0.7rem' : '0.75rem'
+                            }}>
                               {msg.sender}
                             </Typography>
-                          </Badge>
+                          )}
 
                           {msg.pending && (
-                            <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                            <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary', fontSize: isMobile ? '0.65rem' : '0.75rem' }}>
                               Sending...
                             </Typography>
                           )}
 
-                          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {userPresence[msg.sender]?.custom_status && (
-                              <Typography variant="caption" sx={{ color: darkMode ? '#bdbdbd' : 'text.secondary' }}>
-                                {userPresence[msg.sender].custom_status}
-                              </Typography>
-                            )}
-
-                            {hoveredMessageId === msg._id && (
+                          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: isMobile ? 0.5 : 1 }}>
+                            {(hoveredMessageId === msg._id || isMobile) && (
                               <IconButton
-                                size="small"
-                                onClick={(e) => { e.stopPropagation(); openMenu(e, msg); }}
-                                sx={{ p: 0.5, transition: 'transform 140ms ease', '&:hover': { transform: 'scale(1.1)' } }}
+                                size={isMobile ? 'small' : 'small'}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  openMenu(e, msg); 
+                                }}
+                                sx={{ 
+                                  p: isMobile ? 0.5 : 0.5, 
+                                  transition: 'transform 140ms ease', 
+                                  '&:hover': { transform: 'scale(1.1)' },
+                                  opacity: isMobile ? (hoveredMessageId === msg._id ? 1 : 0.7) : 1
+                                }}
                                 aria-label="message actions"
-                                aria-controls={menuMessageId === msg._id ? 'message-menu' : undefined}
-                                aria-expanded={Boolean(menuAnchorEl && menuMessageId === msg._id)}
                               >
-                                <MoreVertIcon fontSize="small" />
+                                <MoreVertIcon fontSize={isMobile ? 'small' : 'small'} />
                               </IconButton>
                             )}
                           </Box>
@@ -986,50 +1287,110 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
 
                         {renderReplyPreview(msg.parent_message_id)}
 
-                        <Typography variant="body1" sx={{ wordWrap: 'break-word', color: darkMode ? '#fafafa' : 'inherit', lineHeight: 1.45 }}>
+                        <Typography variant="body1" sx={{ 
+                          wordWrap: 'break-word', 
+                          color: 'inherit', 
+                          lineHeight: isMobile ? 1.35 : 1.45,
+                          fontSize: 'inherit',
+                          margin: 0,
+                          // Better text rendering
+                          WebkitFontSmoothing: 'antialiased',
+                          MozOsxFontSmoothing: 'grayscale'
+                        }}>
                           {getMessageContent(msg)}
                         </Typography>
 
-                        <Typography component="div" variant="caption" aria-label="timestamp" sx={{ mt: 0.75, display: 'flex', alignItems: 'center', gap: 0.5, color: darkMode ? '#bdbdbd' : 'text.secondary' }}>
-                          <span>{new Date(msg.timestamp || msg.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          {msg.edited && <span aria-label="edited">• edited</span>}
+                        {/* Timestamp with status */}
+                        <Typography component="div" variant="caption" className="message-timestamp" sx={{ 
+                          mt: 0.75, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: isCurrentUser ? 'flex-end' : 'flex-start',
+                          gap: 0.5, 
+                          color: isCurrentUser 
+                            ? (darkMode ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.95)')
+                            : (darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.75)'),
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          opacity: 0.85
+                        }}>
+                          {isCurrentUser ? (
+                            <MessageStatus 
+                              status={msg.status || (msg.pending ? 'sending' : 'sent')} 
+                              timestamp={msg.timestamp || msg.created_at || Date.now()}
+                            />
+                          ) : (
+                            <span>
+                              {(() => {
+                                const date = new Date(msg.timestamp || msg.created_at || Date.now());
+                                const now = new Date();
+                                const diffMs = now - date;
+                                const diffMins = Math.floor(diffMs / 60000);
+                                const diffHours = Math.floor(diffMs / 3600000);
+                                const diffDays = Math.floor(diffMs / 86400000);
+                                
+                                if (diffMins < 1) return 'now';
+                                if (diffMins < 60) return `${diffMins}m`;
+                                if (diffHours < 24) return `${diffHours}h`;
+                                if (diffDays < 7) return `${diffDays}d`;
+                                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                              })()
+                            }
+                            </span>
+                          )}
+                          {msg.edited && <span>• edited</span>}
                         </Typography>
 
-                        <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.25 }}>
+                        {/* Actions - simplified for mobile */}
+                        <Box sx={{ 
+                          mt: isMobile ? 0.5 : 1, 
+                          display: 'flex', 
+                          flexWrap: 'wrap', 
+                          alignItems: 'center', 
+                          gap: isMobile ? 0.125 : 0.25 
+                        }}>
                           {renderReactionsCompact(msg.reactions, hoveredMessageId === msg._id, msg._id)}
 
                           {hoveredMessageId === msg._id && (
-                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEmojiPopover(e, msg); }} sx={{ mr: 0.5 }} aria-label="add reaction">
-                              <EmojiEmotionsIcon fontSize="small" />
+                            <IconButton 
+                              size="small" 
+                              onClick={(e) => { e.stopPropagation(); openEmojiPopover(e, msg); }} 
+                              sx={{ mr: isMobile ? 0.25 : 0.5, p: isMobile ? 0.25 : 0.5 }}
+                            >
+                              <EmojiEmotionsIcon fontSize={isMobile ? 'small' : 'small'} />
                             </IconButton>
                           )}
 
-                          <IconButton size="small" onClick={() => onReply && onReply(msg)} sx={{ mr: 0.5 }} aria-label="reply">
-                            <Reply />
+                          <IconButton 
+                            size="small" 
+                            onClick={() => onReply && onReply(msg)} 
+                            sx={{ mr: isMobile ? 0.25 : 0.5, p: isMobile ? 0.25 : 0.5 }}
+                          >
+                            <Reply fontSize={isMobile ? 'small' : 'small'} />
                           </IconButton>
                         </Box>
 
-                        {/* Tail "pointer" for bubbles */}
-                        {messageStyle === 'bubble' && (
+                        {/* Message bubble tail - positioned based on sender */}
+                        {!isMobile && (
                           <Box sx={{
                             position: 'absolute',
-                            bottom: -2,
-                            [isCurrentUser ? 'right' : 'left']: 8,
+                            bottom: 4,
+                            [isCurrentUser ? 'right' : 'left']: -6,
                             width: 12,
                             height: 12,
-                            transform: isCurrentUser ? 'rotate(45deg)' : 'rotate(45deg)',
-                            bgcolor: 'transparent',
-                            background: isCurrentUser
-                              ? (darkMode ? 'linear-gradient(135deg, #1565c0 0%, #1976d2 100%)' : 'linear-gradient(135deg, #BBDEFB 0%, #90CAF9 100%)')
-                              : (darkMode ? 'linear-gradient(135deg, #2f2f2f 0%, #3d3d3d 100%)' : 'linear-gradient(135deg, #ffffff 0%, #f7f7f7 100%)'),
-                            boxShadow: isCurrentUser ? '2px 2px 6px rgba(25,118,210,0.25)' : '2px 2px 6px rgba(0,0,0,0.08)'
+                            transform: 'rotate(45deg)',
+                            backgroundColor: isCurrentUser 
+                              ? (darkMode ? '#1976d2' : '#2196f3')
+                              : (darkMode ? '#424242' : '#f5f5f5'),
+                            zIndex: -1
                           }} />
                         )}
                       </Box>
                     </Box>
                   </ListItem>
                 </div>
-              );
+              </SwipeableMessage>
+            );
             })}
 
             {/* {messages.map((msg, index) => {
@@ -1166,32 +1527,112 @@ const MessageList = React.memo(({ messages, onReply, searchQuery, onRPSPlay, onL
               open={Boolean(menuAnchorEl && menuMessageId)} 
               onClose={closeMenu} 
               keepMounted 
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} 
-              transformOrigin={{ vertical: 'top', horizontal: 'left' }} 
+              anchorOrigin={{ 
+                vertical: isMobile ? 'top' : 'bottom', 
+                horizontal: isMobile ? 'right' : 'left' 
+              }} 
+              transformOrigin={{ 
+                vertical: isMobile ? 'bottom' : 'top', 
+                horizontal: isMobile ? 'right' : 'left' 
+              }} 
               id="message-menu"
+              sx={{
+                '& .MuiPaper-root': {
+                  backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                  color: darkMode ? '#f1f5f9' : '#000000',
+                  minWidth: 120
+                }
+              }}
             >
-              <MenuItem onClick={(e) => { e.stopPropagation(); const msg = messages.find(m => m._id === menuMessageId); if (msg && onReply) onReply(msg); closeMenu(); }}>Reply</MenuItem>
-              <MenuItem onClick={(e) => { e.stopPropagation(); const msg = messages.find(m => m._id === menuMessageId); if (msg) openEmojiPopover(e, msg); }}>React</MenuItem>
+              <MenuItem 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  const msg = messages.find(m => m._id === menuMessageId); 
+                  if (msg && onReply) onReply(msg); 
+                  closeMenu(); 
+                }}
+                sx={{ color: 'inherit' }}
+              >
+                Reply
+              </MenuItem>
+              <MenuItem 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  const msg = messages.find(m => m._id === menuMessageId); 
+                  if (msg) openEmojiPopover(e, msg); 
+                }}
+                sx={{ color: 'inherit' }}
+              >
+                React
+              </MenuItem>
               {messages.find(m => m._id === menuMessageId)?.sender === user?.username && (
-                <MenuItem onClick={(e) => { e.stopPropagation(); handleDeleteMessage(menuMessageId); closeMenu(); }}>
+                <MenuItem 
+                  onClick={async (e) => { 
+                    e.stopPropagation(); 
+                    try {
+                      await handleDeleteMessage(menuMessageId);
+                      closeMenu();
+                    } catch (error) {
+                      console.error('Delete failed:', error);
+                      closeMenu();
+                    }
+                  }}
+                  sx={{ color: 'error.main' }}
+                >
                   Delete
                 </MenuItem>
               )}
-              <MenuItem onClick={(e) => { e.stopPropagation(); const msg = messages.find(m => m._id === menuMessageId); if (msg && msg.content) { navigator.clipboard?.writeText(msg.content); } closeMenu(); }}>Copy</MenuItem>
+              <MenuItem 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  const msg = messages.find(m => m._id === menuMessageId); 
+                  if (msg && msg.content) { 
+                    navigator.clipboard?.writeText(msg.content); 
+                  } 
+                  closeMenu(); 
+                }}
+                sx={{ color: 'inherit' }}
+              >
+                Copy
+              </MenuItem>
             </Menu> 
 
             <Popover
               open={Boolean(emojiAnchorEl && emojiMessageId)}
               anchorEl={emojiAnchorEl}
               onClose={closeEmojiPopover}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+              anchorOrigin={{ 
+                vertical: isMobile ? 'top' : 'bottom', 
+                horizontal: isMobile ? 'center' : 'left' 
+              }}
+              transformOrigin={{ 
+                vertical: isMobile ? 'bottom' : 'top', 
+                horizontal: isMobile ? 'center' : 'left' 
+              }}
               disableAutoFocus
+              sx={{
+                '& .MuiPaper-root': {
+                  backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                  border: `1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(0, 0, 0, 0.1)'}`,
+                  borderRadius: 2
+                }
+              }}
             >
-              <Box sx={{ p: 1, display: 'flex', gap: 1 }}>
+              <Box sx={{ p: 1, display: 'flex', gap: 1, flexWrap: 'wrap', maxWidth: isMobile ? 240 : 300 }}>
                 {QUICK_EMOJIS.map((emoji) => (
                   <Tooltip key={emoji} title={emoji}>
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleAddReaction(emojiMessageId, emoji); }}>
+                    <IconButton 
+                      size="small" 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        handleAddReaction(emojiMessageId, emoji); 
+                      }}
+                      sx={{
+                        minWidth: isMobile ? 32 : 36,
+                        minHeight: isMobile ? 32 : 36,
+                        fontSize: isMobile ? '16px' : '18px'
+                      }}
+                    >
                       {emoji}
                     </IconButton>
                   </Tooltip>

@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Popover, Box, TextField, IconButton, CircularProgress, Typography, Grid, Alert } from '@mui/material';
+import React, { useState, useEffect, useRef } from 'react';
+import { Popover, Box, TextField, IconButton, CircularProgress, Typography, Grid, ButtonBase } from '@mui/material';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
+import useResponsive from '../hooks/useResponsive';
 
-// Using a working demo API key for Giphy
-const gf = new GiphyFetch('sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh');
+const gf = new GiphyFetch(process.env.REACT_APP_GIPHY_API_KEY || 'sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh');
 
-// Fallback GIFs in case API fails
 const fallbackGifs = [
   { id: '1', title: 'Happy', images: { fixed_height_small: { url: 'https://media.giphy.com/media/3o7TKz9bX9Z8LxQ8q8/giphy.gif' }, fixed_height: { url: 'https://media.giphy.com/media/3o7TKz9bX9Z8LxQ8q8/giphy.gif', width: 200, height: 150 } } },
   { id: '2', title: 'Sad', images: { fixed_height_small: { url: 'https://media.giphy.com/media/3o7TKz9bX9Z8LxQ8q8/giphy.gif' }, fixed_height: { url: 'https://media.giphy.com/media/3o7TKz9bX9Z8LxQ8q8/giphy.gif', width: 200, height: 150 } } },
@@ -16,26 +15,35 @@ const fallbackGifs = [
 ];
 
 const GifPicker = ({ onGifSelect, onClose, anchorEl, open }) => {
+  const { isMobile } = useResponsive();
   const [searchTerm, setSearchTerm] = useState('');
   const [gifs, setGifs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [trendingGifs, setTrendingGifs] = useState([]);
+  const searchTimeoutRef = useRef(null);
+  const cacheRef = useRef({ trending: null, searches: {} });
 
   useEffect(() => {
     loadTrendingGifs();
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
   }, []);
 
   const loadTrendingGifs = async () => {
+    if (cacheRef.current.trending && Date.now() - cacheRef.current.trending.time < 300000) {
+      setTrendingGifs(cacheRef.current.trending.data);
+      setGifs(cacheRef.current.trending.data);
+      return;
+    }
     try {
       setLoading(true);
-      console.log('Loading trending GIFs...');
       const { data } = await gf.trending({ limit: 20 });
-      console.log('Trending GIFs loaded:', data.length);
+      cacheRef.current.trending = { data, time: Date.now() };
       setTrendingGifs(data);
       setGifs(data);
     } catch (error) {
       console.error('Error loading trending GIFs:', error);
-      console.log('Using fallback GIFs...');
       setTrendingGifs(fallbackGifs);
       setGifs(fallbackGifs);
     } finally {
@@ -48,20 +56,29 @@ const GifPicker = ({ onGifSelect, onClose, anchorEl, open }) => {
       setGifs(trendingGifs);
       return;
     }
-
+    if (cacheRef.current.searches[query] && Date.now() - cacheRef.current.searches[query].time < 300000) {
+      setGifs(cacheRef.current.searches[query].data);
+      return;
+    }
     try {
       setLoading(true);
-      console.log('Searching GIFs for:', query);
       const { data } = await gf.search(query, { limit: 20 });
-      console.log('Search results:', data.length);
-      setGifs(data.length > 0 ? data : fallbackGifs);
+      const results = data.length > 0 ? data : fallbackGifs;
+      cacheRef.current.searches[query] = { data: results, time: Date.now() };
+      setGifs(results);
     } catch (error) {
       console.error('Error searching GIFs:', error);
-      console.log('Using fallback GIFs for search...');
       setGifs(fallbackGifs);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => searchGifs(value), 300);
   };
 
   const handleSearch = (e) => {
@@ -77,6 +94,7 @@ const GifPicker = ({ onGifSelect, onClose, anchorEl, open }) => {
       width: gif.images.fixed_height.width,
       height: gif.images.fixed_height.height,
     });
+    onClose();
   };
 
   return (
@@ -93,7 +111,12 @@ const GifPicker = ({ onGifSelect, onClose, anchorEl, open }) => {
         horizontal: 'center',
       }}
     >
-      <Box sx={{ width: 350, maxHeight: 500, overflow: 'auto', p: 2 }}>
+      <Box sx={{ 
+        width: isMobile ? 320 : 350, 
+        maxHeight: isMobile ? 400 : 500, 
+        overflow: 'auto', 
+        p: isMobile ? 1.5 : 2 
+      }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Box sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}>GIF Picker</Box>
           <IconButton size="small" onClick={onClose}>
@@ -107,7 +130,7 @@ const GifPicker = ({ onGifSelect, onClose, anchorEl, open }) => {
             size="small"
             placeholder="Search GIFs..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             InputProps={{
               endAdornment: (
                 <IconButton type="submit" size="small">
@@ -123,26 +146,39 @@ const GifPicker = ({ onGifSelect, onClose, anchorEl, open }) => {
             <CircularProgress />
           </Box>
         ) : (
-          <Grid container spacing={1}>
+          <Grid container spacing={isMobile ? 0.5 : 1}>
             {gifs.map((gif) => (
               <Grid item xs={6} key={gif.id}>
-                <Box
-                  component="img"
-                  src={gif.images.fixed_height_small.url}
-                  alt={gif.title}
+                <ButtonBase
                   sx={{
                     width: '100%',
-                    height: 'auto',
-                    borderRadius: 1,
-                    cursor: 'pointer',
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    touchAction: 'manipulation',
+                    WebkitTapHighlightColor: 'transparent',
                     '&:hover': {
-                      opacity: 0.8,
                       transform: 'scale(1.02)',
                     },
-                    transition: 'all 0.2s ease',
+                    '&:active': {
+                      transform: 'scale(0.98)',
+                    },
+                    transition: 'transform 0.15s ease',
                   }}
+                  onTouchStart={(e) => e.preventDefault()}
                   onClick={() => handleGifClick(gif)}
-                />
+                  disableRipple={false}
+                >
+                  <Box
+                    component="img"
+                    src={gif.images.fixed_height_small.url}
+                    alt={gif.title}
+                    sx={{
+                      width: '100%',
+                      height: 'auto',
+                      display: 'block',
+                    }}
+                  />
+                </ButtonBase>
               </Grid>
             ))}
           </Grid>

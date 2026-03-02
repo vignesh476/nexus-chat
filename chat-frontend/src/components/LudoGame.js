@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Button, Typography, Paper, Grid, Chip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import useResponsive from '../hooks/useResponsive';
 
 const LudoGame = ({ gameState, onRollDice, onMovePiece, onJoinGame, onLeaveGame, onEndTimeout, onTimeoutCheck, onEnd, currentUser, socket, roomId }) => {
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [isRolling, setIsRolling] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const { isMobile } = useResponsive();
 
   if (!gameState) return null;
 
@@ -164,13 +166,15 @@ const LudoGame = ({ gameState, onRollDice, onMovePiece, onJoinGame, onLeaveGame,
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
           <Box sx={{ 
             display: 'grid',
-            gridTemplateColumns: 'repeat(15, 25px)',
-            gridTemplateRows: 'repeat(15, 25px)',
-            gap: 1,
-            p: 2,
+            gridTemplateColumns: `repeat(15, ${isMobile ? '20px' : '25px'})`,
+            gridTemplateRows: `repeat(15, ${isMobile ? '20px' : '25px'})`,
+            gap: isMobile ? 0.5 : 1,
+            p: isMobile ? 1 : 2,
             backgroundColor: '#f5f5f5',
             borderRadius: 2,
-            border: '2px solid #333'
+            border: '2px solid #333',
+            maxWidth: '100%',
+            overflow: 'auto'
           }}>
             {Array.from({ length: 225 }, (_, i) => {
               const row = Math.floor(i / 15);
@@ -212,14 +216,14 @@ const LudoGame = ({ gameState, onRollDice, onMovePiece, onJoinGame, onLeaveGame,
                 <Box
                   key={i}
                   sx={{
-                    width: 25,
-                    height: 25,
+                    width: isMobile ? 20 : 25,
+                    height: isMobile ? 20 : 25,
                     backgroundColor,
                     border: '1px solid #333',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '10px'
+                    fontSize: isMobile ? '8px' : '10px'
                   }}
                 >
                   {content}
@@ -250,8 +254,8 @@ const LudoGame = ({ gameState, onRollDice, onMovePiece, onJoinGame, onLeaveGame,
                       <Box
                         key={i}
                         sx={{
-                          width: 50,
-                          height: 50,
+                          width: isMobile ? 60 : 50,
+                          height: isMobile ? 60 : 50,
                           borderRadius: '50%',
                           backgroundColor: piece ? getPlayerColor(playerIdx) : '#ddd',
                           border: selectedPiece === piece ? '4px solid #000' : '2px solid #333',
@@ -259,6 +263,8 @@ const LudoGame = ({ gameState, onRollDice, onMovePiece, onJoinGame, onLeaveGame,
                           alignItems: 'center',
                           justifyContent: 'center',
                           cursor: 'pointer',
+                          minWidth: '48px', // Ensure minimum touch target
+                          minHeight: '48px',
                           '&:hover': {
                             transform: 'scale(1.1)',
                           }

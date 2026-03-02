@@ -13,8 +13,15 @@ import {
   Grid,
   FormControlLabel,
   Switch,
+  Snackbar,
+  Alert,
 } from '@mui/material';
-import { Undo, Redo, Brush, Clear, Save, Close } from '@mui/icons-material';
+import Undo from '@mui/icons-material/Undo';
+import Redo from '@mui/icons-material/Redo';
+import Brush from '@mui/icons-material/Brush';
+import Clear from '@mui/icons-material/Clear';
+import Save from '@mui/icons-material/Save';
+import Close from '@mui/icons-material/Close';
 import { ReactSketchCanvas } from 'react-sketch-canvas';
 
 const COLORS = [
@@ -49,7 +56,33 @@ export default function DrawingPad({ open, onClose, onSave, socket, room, user }
   const [eraserMode, setEraserMode] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
-  const [backgroundImage, setBackgroundImage] = useState(null); // for synced snapshots
+  const [backgroundImage, setBackgroundImage] = useState(null);
+  const [error, setError] = useState(null);
+
+  const debounceRef = React.useRef(null);
+
+  // Send current paths to server (debounced)
+  const sendPaths = useCallback(async () => {
+    if (!canvasRef.current || !socket || !room) return;
+    try {
+      const paths = await canvasRef.current.exportPaths();
+      socket.emit('drawing_event', { room_id: room.id, sender: user?.username, action: 'paths', payload: { paths } });
+    } catch (e) {
+      console.warn('Failed to export paths', e);
+    }
+  }, [socket, room, user]);
+
+  const updateUndoRedoState = useCallback(async () => {
+    if (canvasRef.current) {
+      const paths = await canvasRef.current.exportPaths();
+      setCanUndo(paths.length > 0);
+      // Debounced send to server
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        sendPaths();
+      }, 500);
+    }
+  }, [sendPaths]);
 
   // Listen for incoming drawing events (paths/clear/sync)
   React.useEffect(() => {
@@ -73,33 +106,27 @@ export default function DrawingPad({ open, onClose, onSave, socket, room, user }
       }
     };
     socket.on('drawing_event', handler);
-    return () => socket.off('drawing_event', handler);
-  }, [socket, room]);
-
-  // Send current paths to server (debounced)
-  const sendPaths = async () => {
-    if (!canvasRef.current || !socket || !room) return;
-    try {
-      const paths = await canvasRef.current.exportPaths();
-      socket.emit('drawing_event', { room_id: room.id, sender: user?.username, action: 'paths', payload: { paths } });
-    } catch (e) {
-      console.warn('Failed to export paths', e);
-    }
-  };
+    return () => {
+      socket.off('drawing_event', handler);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [socket, room, updateUndoRedoState]);
 
 
   const handleStrokeChange = (event, newValue) => {
     setStrokeWidth(newValue);
   };
 
-  const handleColorSelect = (color) => {
+  const handleColorSelect = useCallback((color) => {
     setStrokeColor(color);
     setEraserMode(false);
-  };
+  }, []);
 
-  const handleBackgroundColorSelect = (color) => {
+  const handleBackgroundColorSelect = useCallback((color) => {
     setBackgroundColor(color);
-  };
+  }, []);
 
   const handleEraserToggle = () => {
     setEraserMode(!eraserMode);
@@ -110,48 +137,45 @@ export default function DrawingPad({ open, onClose, onSave, socket, room, user }
       await canvasRef.current.undo();
       updateUndoRedoState();
     }
-  }, []);
+  }, [updateUndoRedoState]);
 
   const handleRedo = useCallback(async () => {
     if (canvasRef.current) {
       await canvasRef.current.redo();
       updateUndoRedoState();
     }
-  }, []);
+  }, [updateUndoRedoState]);
 
   const handleClear = useCallback(async () => {
     if (canvasRef.current) {
       await canvasRef.current.clearCanvas();
       updateUndoRedoState();
     }
-  }, []);
+  }, [updateUndoRedoState]);
 
-  const updateUndoRedoState = useCallback(async () => {
-    if (canvasRef.current) {
-      const paths = await canvasRef.current.exportPaths();
-      setCanUndo(paths.length > 0);
-      // Debounced send to server
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        sendPaths();
-      }, 500);
+  const handleSync = useCallback(async () => {
+    try {
+      if (!canvasRef.current) return;
+      const image = await canvasRef.current.exportImage('png');
+      // send sync to server
+      if (socket && room) socket.emit('drawing_event', { room_id: room.id, sender: user?.username, action: 'sync', payload: { image } });
+      // optionally keep local background
+      setBackgroundImage(image);
+    } catch (e) {
+      console.warn('Sync failed', e);
     }
-  }, []);
-
-  const debounceRef = React.useRef(null);
+  }, [socket, room, user]);
 
   const handleSave = useCallback(async () => {
     if (canvasRef.current) {
       try {
         const imageData = await canvasRef.current.exportImage('png');
-        // Convert base64 to blob
         const response = await fetch(imageData);
         const blob = await response.blob();
-
         onSave(blob);
       } catch (error) {
         console.error('Error exporting drawing:', error);
-        alert('Failed to save drawing');
+        setError('Failed to save drawing');
       }
     }
   }, [onSave]);
@@ -225,18 +249,7 @@ export default function DrawingPad({ open, onClose, onSave, socket, room, user }
                 <IconButton onClick={handleClear} size="small">
                   <Clear />
                 </IconButton>
-                <Button size="small" onClick={async () => {
-                  try {
-                    if (!canvasRef.current) return;
-                    const image = await canvasRef.current.exportImage('png');
-                    // send sync to server
-                    if (socket && room) socket.emit('drawing_event', { room_id: room.id, sender: user?.username, action: 'sync', payload: { image } });
-                    // optionally keep local background
-                    setBackgroundImage(image);
-                  } catch (e) {
-                    console.warn('Sync failed', e);
-                  }
-                }}>Sync</Button>
+                <Button size="small" onClick={handleSync}>Sync</Button>
               </Box>
             </Grid>
           </Grid>
@@ -247,24 +260,27 @@ export default function DrawingPad({ open, onClose, onSave, socket, room, user }
               Colors
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {COLORS.map((color) => (
-                <IconButton
-                  key={color}
-                  onClick={() => handleColorSelect(color)}
-                  sx={{
-                    width: 32,
-                    height: 32,
-                    minWidth: 32,
-                    backgroundColor: color,
-                    border: strokeColor === color ? '2px solid #1976d2' : '2px solid transparent',
-                    '&:hover': {
-                      border: '2px solid #1976d2',
-                    },
-                  }}
-                >
-                  {strokeColor === color && <Brush sx={{ color: color === '#FFFFFF' ? '#000' : '#fff', fontSize: 16 }} />}
-                </IconButton>
-              ))}
+              {COLORS.map((color) => {
+                const handleClick = () => handleColorSelect(color);
+                return (
+                  <IconButton
+                    key={color}
+                    onClick={handleClick}
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      minWidth: 32,
+                      backgroundColor: color,
+                      border: strokeColor === color ? '2px solid #1976d2' : '2px solid transparent',
+                      '&:hover': {
+                        border: '2px solid #1976d2',
+                      },
+                    }}
+                  >
+                    {strokeColor === color && <Brush sx={{ color: color === '#FFFFFF' ? '#000' : '#fff', fontSize: 16 }} />}
+                  </IconButton>
+                );
+              })}
             </Box>
           </Box>
 
@@ -274,22 +290,25 @@ export default function DrawingPad({ open, onClose, onSave, socket, room, user }
               Background
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {BACKGROUND_COLORS.map((color) => (
-                <IconButton
-                  key={color}
-                  onClick={() => handleBackgroundColorSelect(color)}
-                  sx={{
-                    width: 32,
-                    height: 32,
-                    minWidth: 32,
-                    backgroundColor: color,
-                    border: backgroundColor === color ? '2px solid #1976d2' : '2px solid #ccc',
-                    '&:hover': {
-                      border: '2px solid #1976d2',
-                    },
-                  }}
-                />
-              ))}
+              {BACKGROUND_COLORS.map((color) => {
+                const handleClick = () => handleBackgroundColorSelect(color);
+                return (
+                  <IconButton
+                    key={color}
+                    onClick={handleClick}
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      minWidth: 32,
+                      backgroundColor: color,
+                      border: backgroundColor === color ? '2px solid #1976d2' : '2px solid #ccc',
+                      '&:hover': {
+                        border: '2px solid #1976d2',
+                      },
+                    }}
+                  />
+                );
+              })}
             </Box>
           </Box>
         </Paper>
@@ -320,6 +339,11 @@ export default function DrawingPad({ open, onClose, onSave, socket, room, user }
           Save Drawing
         </Button>
       </DialogActions>
+      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError(null)}>
+        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
     </Dialog>
   );
 }

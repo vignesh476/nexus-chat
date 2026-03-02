@@ -1,0 +1,556 @@
+/* Mobile-specific styles for Nexus Chat */
+
+/* Fix scrolling issues on all pages */
+@media screen and (max-width: 768px) {
+  /* Enable scrolling for main content */
+  main {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Fix bottom navigation z-index issues */
+  .MuiBottomNavigation-root {
+    z-index: 1000 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+  
+  /* Hide bottom nav only on chat pages */
+  .chat-page .MuiBottomNavigation-root {
+    display: none !important;
+  }
+  
+  /* Ensure content doesn't get hidden behind bottom nav */
+  .page-content {
+    padding-bottom: 70px !important;
+  }
+  
+  .chat-page .page-content {
+    padding-bottom: 0 !important;
+  }
+}
+
+/* Fix for message input blocking issue */
+@media screen and (max-width: 768px) {
+  /* Fix the specific MuiPaper class that's blocking */
+  .MuiPaper-root.MuiPaper-elevation.MuiPaper-rounded.MuiPaper-elevation8.css-c532t1-MuiPaper-root {
+    z-index: 1001 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+  
+  /* Ensure proper spacing for chat messages */
+  .chat-messages-container {
+    padding-bottom: 100px !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Hide bottom navigation on chat pages */
+@media screen and (max-width: 768px) {
+  .chat-page .MuiBottomNavigation-root {
+    display: none !important;
+  }
+  
+  .chat-page {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Prevent zoom on input focus for iOS */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select,
+  .MuiInputBase-input {
+    font-size: 16px !important;
+    transform: translateZ(0);
+  }
+  
+  /* WCAG AA Compliant Colors */
+  .message-bubble.current-user {
+    background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%) !important;
+    color: #ffffff !important;
+  }
+  
+  .message-bubble.other-user {
+    background: #e5e7eb !important;
+    color: #1a202c !important;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .message-bubble.other-user {
+      background: #2d3748 !important;
+      color: #f7fafc !important;
+    }
+  }
+}
+
+/* Remove 300ms tap delay */
+* {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Improve touch targets */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  .MuiIconButton-root,
+  .MuiButton-root,
+  .MuiButtonBase-root {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .MuiListItemButton-root {
+    min-height: 48px;
+  }
+}
+
+/* Fix iOS Safari viewport issues */
+@supports (-webkit-touch-callout: none) {
+  .mobile-full-height {
+    height: -webkit-fill-available;
+  }
+}
+
+/* Smooth scrolling for mobile */
+@media screen and (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent horizontal scroll */
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* Fix input zoom on iOS */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  
+  /* Improve tap targets */
+  .MuiIconButton-root {
+    padding: 12px;
+  }
+  
+  /* Fix video call modal on mobile */
+  .MuiDialog-paperFullScreen {
+    height: 100vh !important;
+    height: -webkit-fill-available !important;
+  }
+  
+  /* Mobile message bubbles optimization */
+  .MuiListItem-root {
+    padding: 4px 8px !important;
+  }
+  
+  /* Compact message spacing */
+  .message-bubble {
+    margin-bottom: 4px !important;
+    padding: 8px 12px !important;
+  }
+}
+
+/* Landscape mode adjustments */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+  .mobile-landscape-adjust {
+    height: 100vh;
+    height: -webkit-fill-available;
+  }
+}
+
+/* PWA safe area adjustments for notched devices */
+@supports (padding: max(0px)) {
+  .safe-area-inset-top {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+  
+  .safe-area-inset-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+  
+  .safe-area-inset-left {
+    padding-left: max(env(safe-area-inset-left), 0px);
+  }
+  
+  .safe-area-inset-right {
+    padding-right: max(env(safe-area-inset-right), 0px);
+  }
+}
+
+/* Fix for mobile keyboard overlay */
+@media screen and (max-width: 768px) {
+  .mobile-keyboard-fix {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+  }
+}
+
+/* Improve mobile video call experience */
+@media screen and (max-width: 768px) {
+  video {
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* Mobile-specific animations */
+@media (prefers-reduced-motion: no-preference) and (max-width: 768px) {
+  .mobile-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+}
+
+/* Fix for mobile drawer */
+@media screen and (max-width: 768px) {
+  .MuiDrawer-paperAnchorLeft {
+    width: 85vw !important;
+    max-width: 320px !important;
+  }
+}
+
+/* Mobile message input improvements */
+@media screen and (max-width: 768px) {
+  .mobile-message-input {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 8px 16px;
+    z-index: 1000;
+  }
+  
+  .mobile-message-input.dark {
+    background: rgba(30, 41, 59, 0.95);
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+  }
+  
+  /* Optimize message list for mobile */
+  .mobile-message-list {
+    height: calc(100vh - 64px - 80px) !important;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Hide overlapping multiline input */
+  .MuiInputBase-root.MuiOutlinedInput-root.MuiInputBase-colorPrimary.MuiInputBase-fullWidth.MuiInputBase-formControl.MuiInputBase-multiline.css-rkonj-MuiInputBase-root-MuiOutlinedInput-root {
+    display: none !important;
+  }
+  
+  /* Premium Mobile Chat Input Container - Light & Dark Mode */
+  .MuiBox-root.css-gky07o {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    min-height: 60px !important;
+    max-height: 60px !important;
+    padding: 8px 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    background: var(--chat-input-bg, rgba(255, 255, 255, 0.95)) !important;
+    backdrop-filter: blur(20px) !important;
+    border-top: 1px solid var(--chat-input-border, rgba(0, 0, 0, 0.08)) !important;
+    z-index: 1002 !important;
+    box-shadow: 0 -2px 12px var(--chat-input-shadow, rgba(0, 0, 0, 0.1)) !important;
+  }
+  
+  /* Dark mode variables */
+  body.dark .MuiBox-root.css-gky07o,
+  html[data-theme="dark"] .MuiBox-root.css-gky07o {
+    --chat-input-bg: rgba(30, 41, 59, 0.95);
+    --chat-input-border: rgba(148, 163, 184, 0.2);
+    --chat-input-shadow: rgba(0, 0, 0, 0.3);
+    --input-bg: #374151;
+    --input-text: #f9fafb;
+    --input-placeholder: #9ca3af;
+  }
+  
+  /* Light mode variables */
+  body:not(.dark) .MuiBox-root.css-gky07o,
+  html:not([data-theme="dark"]) .MuiBox-root.css-gky07o {
+    --input-bg: #f5f5f5;
+    --input-text: #333;
+    --input-placeholder: #999;
+  }
+  
+  /* Hide external emoji button - move it inside */
+  .MuiBox-root.css-gky07o > .MuiIconButton-root:first-child[aria-label*="emoji"],
+  .MuiBox-root.css-gky07o > .MuiIconButton-root:first-child .MuiSvgIcon-root[data-testid="EmojiEmotionsIcon"] {
+    display: none !important;
+  }
+  
+  /* Main input field styling */
+  .MuiBox-root.css-gky07o .MuiInputBase-root {
+    flex: 1 !important;
+    background: var(--input-bg, #f5f5f5) !important;
+    border-radius: 20px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    border: none !important;
+    position: relative !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiInputBase-root .MuiOutlinedInput-notchedOutline {
+    border: none !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiInputBase-root .MuiInputBase-input {
+    padding: 10px 45px 10px 16px !important;
+    font-size: 16px !important;
+    line-height: 20px !important;
+    color: var(--input-text, #333) !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiInputBase-root .MuiInputBase-input::placeholder {
+    color: var(--input-placeholder, #999) !important;
+    opacity: 1 !important;
+  }
+  
+  /* Emoji icon inside input field - replacing external button */
+  .MuiBox-root.css-gky07o .MuiInputBase-root::before {
+    content: '\1F60A' !important;
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 18px !important;
+    cursor: pointer !important;
+    opacity: 0.7 !important;
+    transition: all 0.2s ease !important;
+    z-index: 10 !important;
+    width: 20px !important;
+    height: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    background: rgba(102, 126, 234, 0.1) !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiInputBase-root:hover::before {
+    opacity: 1 !important;
+    transform: translateY(-50%) scale(1.1) !important;
+    background: rgba(102, 126, 234, 0.2) !important;
+  }
+  
+  /* Attachment button - first action button */
+  .MuiBox-root.css-gky07o .MuiIconButton-root:first-child:not([style*="display: none"]) {
+    background: #667eea !important;
+    color: white !important;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 20px !important;
+    padding: 0 !important;
+    transition: all 0.2s ease !important;
+    flex-shrink: 0 !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiIconButton-root:first-child:not([style*="display: none"]) .MuiSvgIcon-root {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiIconButton-root:first-child:not([style*="display: none"]):active {
+    transform: scale(0.95) !important;
+  }
+  
+  /* Audio record button - second action button */
+  .MuiBox-root.css-gky07o .MuiIconButton-root:nth-child(2) {
+    background: #ff6b6b !important;
+    color: white !important;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 20px !important;
+    padding: 0 !important;
+    transition: all 0.2s ease !important;
+    flex-shrink: 0 !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiIconButton-root:nth-child(2) .MuiSvgIcon-root {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiIconButton-root:nth-child(2):active {
+    transform: scale(0.95) !important;
+  }
+  
+  /* Send button */
+  .MuiBox-root.css-gky07o .MuiIconButton-root:last-child {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+    color: white !important;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 20px !important;
+    padding: 0 !important;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3) !important;
+    transition: all 0.2s ease !important;
+    flex-shrink: 0 !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiIconButton-root:last-child .MuiSvgIcon-root {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  
+  .MuiBox-root.css-gky07o .MuiIconButton-root:last-child:active {
+    transform: scale(0.95) !important;
+  }
+  
+  /* Ensure message container has proper bottom spacing */
+  .chat-messages-container {
+    padding-bottom: 90px !important;
+    margin-bottom: 0 !important;
+  }
+  
+
+}
+
+/* Profile Page Mobile Optimizations */
+@media screen and (max-width: 768px) {
+  /* Profile picture upload area */
+  .profile-picture-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+  }
+  
+  /* Form controls optimization */
+  .MuiTextField-root,
+  .MuiFormControl-root {
+    margin-bottom: 16px !important;
+  }
+  
+  /* Color picker mobile optimization */
+  input[type="color"] {
+    width: 100% !important;
+    height: 48px !important;
+    border-radius: 8px !important;
+    border: 2px solid #e0e0e0 !important;
+    cursor: pointer;
+  }
+  
+  /* Settings accordion optimization */
+  .MuiAccordion-root {
+    margin-bottom: 8px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  }
+  
+  .MuiAccordionSummary-root {
+    min-height: 64px !important;
+    padding: 0 20px !important;
+  }
+  
+  .MuiAccordionDetails-root {
+    padding: 20px !important;
+  }
+  
+  /* Switch and radio button touch targets */
+  .MuiSwitch-root {
+    padding: 12px !important;
+  }
+  
+  .MuiRadio-root {
+    padding: 12px !important;
+  }
+  
+  /* Profile avatar mobile styling */
+  .profile-avatar-mobile {
+    width: 100px !important;
+    height: 100px !important;
+    margin: 0 auto 16px !important;
+    border: 4px solid #fff !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  }
+  
+  /* Storage progress bars */
+  .storage-progress {
+    height: 12px !important;
+    border-radius: 6px !important;
+    margin: 8px 0 !important;
+  }
+  
+  /* Mobile-friendly buttons */
+  .mobile-action-button {
+    min-height: 48px !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+  }
+}
+
+/* Improve mobile bottom navigation */
+@media screen and (max-width: 768px) {
+  .MuiBottomNavigation-root {
+    height: 56px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+  }
+  
+  .MuiBottomNavigationAction-root {
+    min-width: 0;
+    padding: 6px 12px 8px;
+  }
+  
+  .MuiBottomNavigationAction-label {
+    font-size: 0.75rem;
+  }
+}
+
+/* Fast tap response for interactive elements */
+@media (hover: none) and (pointer: coarse) {
+  .MuiButtonBase-root {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  .MuiButtonBase-root:active {
+    transform: scale(0.95);
+    transition: transform 0.1s ease;
+  }
+}
