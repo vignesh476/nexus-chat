@@ -424,6 +424,14 @@ const ChatRoomPage = () => {
     socket.on('message_deleted', onMessageDeleted);
     socket.on('typing', onTyping);
 
+    // Also listen for any broadcast messages from Redis (for multi-instance support)
+    socket.on('chat_message', (m) => {
+      console.log('[ChatRoomPage] Received chat_message event:', m);
+      if (m?.room_id === roomId) {
+        onMessage(m);
+      }
+    });
+
     // Clear reply if the message we were replying to gets deleted
     const onMessageDeletedClearReply = ({ messageId }) => {
       setReplyTo(current => current && current._id === messageId ? null : current);
@@ -439,6 +447,7 @@ const ChatRoomPage = () => {
       socket.off('typing', onTyping);
       socket.off('game_state_update', onGameStateUpdate);
       socket.off('message_deleted', onMessageDeletedClearReply);
+      socket.off('chat_message'); // Clean up Redis broadcast listener
       joinedRef.current = false;
     };
   }, [socket, roomId]);
