@@ -1,6 +1,8 @@
 import axios from 'axios';
+import config from './config';
 
-const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+// Use config module for consistent API URL handling
+const API_BASE_URL = config.API_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -84,87 +86,19 @@ export const usersAPI = {
   sendFriendRequest: (receiver) => api.post('/users/send_friend_request', { receiver }),
   acceptFriendRequest: (sender) => api.post('/users/accept_friend_request', { sender }),
   rejectFriendRequest: (sender) => api.post('/users/reject_friend_request', { sender }),
+  getUserProfile: (username) => api.get(`/users/${username}`),
+  updateProfile: (data) => api.put('/users/profile', data),
   getFriendRequests: () => api.get('/users/friend_requests'),
-  getFriends: () => api.get('/users/friends'),
-  updateNotificationPreferences: (preferences) => api.put('/users/notification_preferences', preferences),
-  muteRoom: (roomId) => api.post(`/users/mute_room/${roomId}`),
-  unmuteRoom: (roomId) => api.post(`/users/unmute_room/${roomId}`),
-  uploadProfilePicture: (formData) => api.post('/users/upload_profile_picture', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  deleteProfilePicture: () => api.delete('/users/delete_profile_picture'),
-  updateProfilePicturePrivacy: (privacy) => api.put('/users/update_profile_privacy', { privacy }),
-  updateProfile: (profileData) => api.put('/users/update_profile', profileData),
-  getUserProfile: (username) => api.get(`/users/profile/${username}`),
-  blockUser: (username) => api.post('/users/block', { username }),
-  unblockUser: (username) => api.post('/users/unblock', { username }),
-  getBlockedUsers: () => api.get('/users/blocked'),
-  // Enhanced settings API
-  updateSettings: (settings) => api.put('/users/settings', settings),
-  updateNotificationSettings: (settings) => api.put('/users/settings/notifications', settings).catch(() => api.put('/users/settings', { notifications: settings })),
-  updatePrivacySettings: (settings) => api.put('/users/settings/privacy', settings).catch(() => api.put('/users/settings', { privacy: settings })),
-  updateChatSettings: (settings) => api.put('/users/settings/chat', settings).catch(() => api.put('/users/settings', { chat: settings })),
-  updateAccessibilitySettings: (settings) => api.put('/users/settings/accessibility', settings).catch(() => api.put('/users/settings', { accessibility: settings })),
-  clearCache: () => api.post('/users/clear_cache').catch(() => Promise.resolve({ data: { message: 'Cache cleared' } })),
-  backupUserData: () => api.get('/users/backup').catch(() => Promise.resolve({ data: { backup: 'mock_data' } })),
-  exportUserData: () => api.get('/users/export').catch(() => Promise.resolve({ data: 'username,status\nuser,online' })),
-  getStorageInfo: () => api.get('/users/storage').catch(() => Promise.resolve({ data: { used: 245, total: 1000, messages: 120, media: 95, cache: 30 } })),
-  // Push notifications
-  getVapidPublic: () => api.get('/users/vapid_public'),
-  registerPushSubscription: (subscription) => api.post('/users/register_push_subscription', subscription),
+  clearCache: () => api.post('/users/clear_cache'),
+  backupUserData: () => api.get('/users/backup'),
+  exportUserData: () => api.get('/users/export'),
+  getStorageInfo: () => api.get('/users/storage_info'),
 };
 
-// Rooms API
-export const roomsAPI = {
-  createRoom: (roomData) => api.post('/rooms/create', roomData),
-  listRooms: () => api.get('/rooms/'),
-  getRoom: (roomId) => api.get(`/rooms/${roomId}`),
-  deleteRoom: (roomId) => api.delete(`/rooms/${roomId}`),
-  addMember: (roomId, username) => api.post(`/rooms/${roomId}/add_member`, { username }),
-  removeMember: (roomId, username) => api.post(`/rooms/${roomId}/remove_member`, { username }),
-  promoteAdmin: (roomId, username) => api.post(`/rooms/${roomId}/promote_admin`, { username }),
-  leaveGroup: (roomId) => api.post(`/rooms/${roomId}/leave`),
-};
-
-// Messages API
-// export const messagesAPI = {
-//   sendMessage: (messageData) => api.post('/messages/send', messageData),
-//   getMessages: (roomId) => api.get(`/messages/${roomId}`),
-//   reactToMessage: (messageId, reactionData) => api.post(`/messages/${messageId}/react`, reactionData),
-// };
-export const messagesAPI = {
-  sendMessage: (messageData) => api.post('/messages/send', messageData),
-  getMessages: (roomId, params = {}) => {
-    const queryParams = new URLSearchParams(params).toString();
-    return api.get(`/messages/${roomId}${queryParams ? `?${queryParams}` : ''}`);
-  },
-  reactToMessage: (messageId, reactionData) => api.post(`/messages/${messageId}/react`, reactionData),
-  editMessage: (messageId, messageData) => api.put(`/messages/${messageId}`, messageData),
-  deleteMessage: (messageId) => api.delete(`/messages/${messageId}`),
-  addReaction: (messageId, emoji) => api.post(`/messages/${messageId}/react`, { emoji }),
-  removeReaction: (messageId, emoji) => api.post(`/messages/${messageId}/react`, { emoji }),
-  searchMessages: (roomId, query) => api.get(`/messages/${roomId}/search?q=${encodeURIComponent(query)}`),
-  forwardMessage: (messageId, targetRoomIds) => api.post(`/messages/${messageId}/forward`, { target_rooms: targetRoomIds }),
-  votePoll: (pollId, voteData) => api.post(`/messages/polls/${pollId}/vote`, voteData),
-  // Additional message APIs
-  sendFile: (formData) => api.post('/messages/send_file', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  uploadFile: (formData) => api.post('/messages/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  downloadFile: (messageId, token) => api.get(`/messages/download/${messageId}`, {
-    params: token ? { token } : {},
-    responseType: 'blob',
-  }),
-  searchImages: (query = '') => api.get('/messages/search_images', { params: { query } }),
-  sendPoll: (pollData) => api.post('/messages/send_poll', pollData),
-};
 // Presence API
 export const presenceAPI = {
   getPresence: () => api.get('/users/presence'),
-  updatePresence: (presenceData) => api.put('/users/presence', presenceData),
-  getOnlineUsers: () => api.get('/users/online'),
+  updatePresence: (data) => api.post('/users/presence', data),
 };
 
 // Calls API
@@ -190,6 +124,29 @@ export const storiesAPI = {
   },
   highlightStory: (storyId) => api.post(`/stories/${storyId}/highlight`),
   deleteStory: (storyId) => api.delete(`/stories/${storyId}`),
+};
+
+// Messages API
+export const messagesAPI = {
+  getMessages: (roomId, limit = 50, offset = 0) => api.get(`/messages/${roomId}`, { params: { limit, offset } }),
+  sendMessage: (message) => api.post('/messages/send', message),
+  sendFile: (formData) => api.post('/messages/send_file', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  deleteMessage: (messageId) => api.delete(`/messages/${messageId}`),
+  reactToMessage: (messageId, reaction) => api.post(`/messages/${messageId}/react`, reaction),
+  votePoll: (messageId, data) => api.post(`/messages/polls/${messageId}/vote`, data),
+};
+
+// Rooms API
+export const roomsAPI = {
+  getRooms: () => api.get('/rooms/'),
+  getRoom: (roomId) => api.get(`/rooms/${roomId}`),
+  createRoom: (data) => api.post('/rooms/', data),
+  updateRoom: (roomId, data) => api.put(`/rooms/${roomId}`, data),
+  deleteRoom: (roomId) => api.delete(`/rooms/${roomId}`),
+  addMember: (roomId, username) => api.post(`/rooms/${roomId}/members`, { username }),
+  removeMember: (roomId, username) => api.delete(`/rooms/${roomId}/members/${username}`),
 };
 
 // Search API

@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { authAPI, presenceAPI, usersAPI, setAuthTokenOnApiClient } from '../api';
+import { getProductionUrl } from '../utils/urlUtils';
 
 const AuthContext = createContext();
 
@@ -71,9 +72,11 @@ export const AuthProvider = ({ children }) => {
     if (!username) return;
     try {
       const response = await usersAPI.getUserProfile(username);
+      // Rewrite profile picture URL if it's a local development URL
+      const profilePictureUrl = getProductionUrl(response.data.profile_picture_url);
       setUser(prev => ({
         ...prev,
-        profile_picture: response.data.profile_picture_url,
+        profile_picture: profilePictureUrl,
         status: response.data.status,
         custom_status: response.data.custom_status
       }));

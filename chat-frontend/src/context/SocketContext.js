@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import io from 'socket.io-client';
+import config from '../config';
 
 const SocketContext = createContext();
 
@@ -23,17 +24,14 @@ export const SocketProvider = ({ children }) => {
   const initializeSocket = useCallback(() => {
     if (socketRef.current?.connected) return;
 
-    // Use REACT_APP_SOCKET_URL if set, otherwise fallback to REACT_APP_API_URL
-    const socketEnvUrl = process.env.REACT_APP_SOCKET_URL;
-    const apiEnvUrl = process.env.REACT_APP_API_URL;
-    const fallbackUrl = apiEnvUrl || 'http://localhost:8000';
-    const SOCKET_URL = (socketEnvUrl || fallbackUrl).replace(/\/$/, '');
+    // Use config module for consistent URL handling
+    const SOCKET_URL = config.SOCKET_URL;
     
     console.log('[SocketContext] Initializing socket connection to', SOCKET_URL);
     
-    // Warn if using fallback
-    if (!socketEnvUrl && !apiEnvUrl && process.env.NODE_ENV === 'development') {
-      console.warn('[SocketContext] WARNING: Using fallback URL. Set REACT_APP_SOCKET_URL or REACT_APP_API_URL for proper configuration.');
+    // Warn if using fallback in development
+    if (config.ENVIRONMENT === 'development' && !process.env.REACT_APP_API_URL) {
+      console.warn('[SocketContext] WARNING: Using fallback URL. Set REACT_APP_API_URL for proper configuration.');
     }
     
     socketRef.current = io(SOCKET_URL, { 

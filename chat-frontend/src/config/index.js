@@ -1,7 +1,7 @@
 // Configuration for API URLs - supports both local development and production (Vercel)
 // Environment variables:
 // - REACT_APP_API_URL: Backend API URL (REQUIRED for production)
-// - REACT_APP_SOCKET_URL: WebSocket URL (optional, defaults to API_URL)
+// - REACT_APP_SOCKET_URL: WebSocket URL (optional, defaults to API_URL with ws:// protocol)
 // - REACT_APP_ENVIRONMENT: 'development' or 'production'
 
 // Default fallback for local development - this should only be used in development
@@ -26,16 +26,43 @@ const getApiUrl = () => {
   return DEFAULT_LOCAL_API_URL;
 };
 
+// Helper to convert HTTP URL to WebSocket URL
+const convertToWebSocketUrl = (url) => {
+  if (!url) return url;
+  
+  // If already ws:// or wss://, return as-is
+  if (url.startsWith('ws://') || url.startsWith('wss://')) {
+    return url;
+  }
+  
+  // Convert http:// to ws://
+  if (url.startsWith('http://')) {
+    return url.replace('http://', 'ws://');
+  }
+  
+  // Convert https:// to wss://
+  if (url.startsWith('https://')) {
+    return url.replace('https://', 'wss://');
+  }
+  
+  return url;
+};
+
 const getSocketUrl = () => {
   // Check for environment variable
   const envUrl = process.env.REACT_APP_SOCKET_URL;
   
   if (envUrl) {
-    return envUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    const cleanUrl = envUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    console.log('[Config] Using Socket URL from environment:', cleanUrl);
+    return cleanUrl;
   }
   
-  // Fallback to API_URL if SOCKET_URL not set
-  return getApiUrl();
+  // Fallback to API_URL but convert HTTP to WebSocket protocol
+  const apiUrl = getApiUrl();
+  const wsUrl = convertToWebSocketUrl(apiUrl);
+  console.log('[Config] Using WebSocket URL derived from API URL:', wsUrl);
+  return wsUrl;
 };
 
 const config = {

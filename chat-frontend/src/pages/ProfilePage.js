@@ -6,6 +6,7 @@ import { usersAPI } from '../api';
 import useResponsive from '../hooks/useResponsive';
 import useSettings from '../hooks/useSettings';
 import ProfilePictureDialog from '../components/ProfilePictureDialog';
+import { getProductionUrl } from '../utils/urlUtils';
 import {
   Container,
   Paper,
