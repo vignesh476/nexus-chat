@@ -6,8 +6,10 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { interactStory, deleteStory } from '../api/stories';
 
+import config from '../config';
+
 // Get API URL from environment variable with fallback for development
-const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+const API_BASE_URL = config.API_URL;
 
 // Helper function to build media URLs
 const getMediaUrl = (filePath) => {
