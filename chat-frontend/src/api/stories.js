@@ -1,100 +1,119 @@
-import axios from 'axios';
-import config from '../config';
+// Use explicit API base (env override) to avoid hitting the React dev server root
+import storiesCache from '../services/storiesCache';
 
-// Use config module for consistent API URL handling
-const API_BASE = config.API_URL;
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const base = `${API_BASE.replace(/\/+$|$/, '')}/stories`;
 
-const storyApi = axios.create({
-  baseURL: base,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000,
-});
-
-// Add auth token to requests
-storyApi.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('nexus_token') || localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+export async function getStories() {
+  // Try cache first
+  const cached = await storiesCache.getStories();
+  if (cached) {
+    return cached;
   }
-  return config;
-});
 
-export const storiesApi = {
-  // Create a new story
-  createStory: async (formData) => {
-    try {
-      const response = await storyApi.post('/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error creating story:', error);
-      throw error;
+  const res = await fetch(`${base}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+  if (!res.ok) throw new Error('Failed to fetch stories');
+  const stories = await res.json();
+  
+  // Cache the results
+  await storiesCache.setStories(stories);
+  return stories;
+}
+
+export async function getUserStories(username) {
+  // Try cache first
+  const cached = await storiesCache.getStories(username);
+  if (cached) {
+    return cached;
+  }
+
+  const res = await fetch(`${base}/${username}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+  if (!res.ok) throw new Error('Failed to fetch user stories');
+  const stories = await res.json();
+  
+  // Cache the results
+  await storiesCache.setStories(stories, username);
+  return stories;
+}
+
+export async function createStory({ story_type, content, interactive, privacy = 'everyone', allowed_viewers = [], file }) {
+  const fd = new FormData();
+  fd.append('story_type', story_type);
+  if (content) fd.append('content', content);
+  if (interactive) fd.append('interactive', JSON.stringify(interactive));
+  fd.append('privacy', privacy);
+  if (allowed_viewers && allowed_viewers.length) fd.append('allowed_viewers', JSON.stringify(allowed_viewers));
+  if (file) fd.append('file', file);
+
+  const res = await fetch(`${base}/`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+    body: fd
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.detail || 'Failed to create story');
+  }
+  const j = await res.json();
+  
+  // Invalidate cache after creating story
+  await storiesCache.invalidateStories();
+  
+  // Try to return the created story by refreshing the feed and matching id
+  try {
+    if (j.story_id) {
+      const all = await getStories();
+      const found = all.find(s => s._id === j.story_id);
+      if (found) return found;
+      // fallback: return the most recent
+      return all[0];
     }
-  },
+  } catch (e) {
+    // ignore and return raw response
+  }
+  return j;
+}
 
-  // Get all stories
-  getAllStories: async () => {
-    try {
-      const response = await storyApi.get('/');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching stories:', error);
-      throw error;
-    }
-  },
+export async function interactStory(story_id, action, payload) {
+  const fd = new FormData();
+  fd.append('action', action);
+  if (payload) fd.append('payload', JSON.stringify(payload));
 
-  // Get stories for a specific user
-  getUserStories: async (username) => {
-    try {
-      const response = await storyApi.get(`/${username}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching user stories:', error);
-      throw error;
-    }
-  },
+  const res = await fetch(`${base}/${story_id}/interact`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+    body: fd
+  });
+  if (!res.ok) throw new Error('Failed to interact with story');
+  
+  // Invalidate cache after interaction
+  await storiesCache.invalidateStories();
+  
+  return res.json();
+}
 
-  // Interact with a story (view, reply, etc.)
-  interactWithStory: async (storyId, action, payload = null) => {
-    try {
-      const formData = new FormData();
-      formData.append('action', action);
-      if (payload) {
-        formData.append('payload', JSON.stringify(payload));
-      }
-      const response = await storyApi.post(`/${storyId}/interact`, formData);
-      return response.data;
-    } catch (error) {
-      console.error('Error interacting with story:', error);
-      throw error;
-    }
-  },
+export async function highlightStory(story_id) {
+  const res = await fetch(`${base}/${story_id}/highlight`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+  });
+  if (!res.ok) throw new Error('Failed to highlight story');
+  
+  // Invalidate cache after highlighting
+  await storiesCache.invalidateStories();
+  
+  return res.json();
+}
 
-  // Mark story as seen
-  markStorySeen: async (storyId) => {
-    try {
-      const response = await storyApi.post(`/${storyId}/seen`);
-      return response.data;
-    } catch (error) {
-      console.error('Error marking story as seen:', error);
-      throw error;
-    }
-  },
-
-  // Delete a story
-  deleteStory: async (storyId) => {
-    try {
-      const response = await storyApi.delete(`/${storyId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting story:', error);
-      throw error;
-    }
-  },
-};
-
-export default storiesApi;
+export async function deleteStory(story_id) {
+  const res = await fetch(`${base}/${story_id}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+  });
+  if (!res.ok) throw new Error('Failed to delete story');
+  
+  // Invalidate cache after deletion
+  await storiesCache.invalidateStories();
+  
+  return res.json();
+}
